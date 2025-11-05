@@ -59,20 +59,25 @@ school-agent run "How do I create a React component?"
 **Phase 1: ✅ Complete** - Foundation and terminal UI
 **Phase 2: ✅ Complete** - File system tools (list, read, search)
 **Phase 3: ✅ Complete** - System tools (bash, web search, write files)
+**Phase 4: ✅ Complete** - Editing tools (search-replace, edit, diffs)
+**Phase 5: ✅ Complete** - Patch system (apply & generate patches)
 
 **What works now:**
 - ✅ Interactive chat with Claude Sonnet 4.5
 - ✅ List files and directories
 - ✅ Read file contents
 - ✅ Write and modify files
+- ✅ Edit files with structured changes (line-based)
+- ✅ Search and replace in files (with regex support)
+- ✅ Apply unified diff patches (git-compatible)
+- ✅ Generate patches from file changes
+- ✅ Visual diffs with color coding
 - ✅ Search code with ripgrep
 - ✅ Execute bash commands
 - ✅ Search the web
-- ✅ Agentic tool calling (6 tools available)
+- ✅ Agentic tool calling (10 tools available)
 
-**Coming soon (Phase 4+):**
-- Code editing (search & replace)
-- Patch system (apply diffs)
+**Coming soon (Phase 6):**
 - Canvas LMS integration
 - Todo management
 - GitHub documentation (DeepWiki)
