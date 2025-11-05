@@ -1,0 +1,52 @@
+{
+  "name": "school-agent",
+  "version": "1.0.0",
+  "description": "AI coding assistant for students built with Claude Sonnet 4.5",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "school-agent": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+  },
+  "keywords": [
+    "ai",
+    "assistant",
+    "claude",
+    "student",
+    "coding",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.3",
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
+    "commander": "^11.1.0",
+    "chalk": "^5.3.0",
+    "ora": "^7.0.1",
+    "dotenv": "^16.3.1",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0",
+    "tsup": "^8.0.1",
+    "vitest": "^1.0.4",
+    "prettier": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
