@@ -124,15 +124,30 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
         } else if (chunk.type === 'tool_use' && chunk.toolName) {
           // Show tool being used
           setCurrentToolUse(chunk.toolName);
-          setMessages(prev => [
-            ...prev,
-            {
-              role: 'tool',
-              content: `Using ${chunk.toolName}...`,
-              toolName: chunk.toolName,
-              toolInput: chunk.toolInput,
-            },
-          ]);
+          
+          // Only add a new tool message if the last message isn't already the same tool
+          setMessages(prev => {
+            const lastMessage = prev[prev.length - 1];
+            const isDuplicateTool = lastMessage?.role === 'tool' && 
+                                   lastMessage?.toolName === chunk.toolName &&
+                                   !lastMessage?.executionTime; // Not yet completed
+            
+            if (isDuplicateTool) {
+              // Don't add duplicate tool message
+              return prev;
+            }
+            
+            return [
+              ...prev,
+              {
+                role: 'tool',
+                content: `Using ${chunk.toolName}...`,
+                toolName: chunk.toolName,
+                toolInput: chunk.toolInput,
+              },
+            ];
+          });
+          
           // Reset assistant message for next text block
           assistantMessage = '';
           currentAssistantIndex = -1;
