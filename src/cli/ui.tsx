@@ -3,9 +3,11 @@ import { Box, Text, useInput } from 'ink';
 import type { AgentController } from '../agent/controller.js';
 
 interface Message {
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'file_change';
   content: string;
   toolName?: string;
+  fileName?: string;
+  lineChanges?: string;
 }
 
 interface ChatUIProps {
@@ -17,7 +19,7 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
     {
       role: 'system',
       content:
-        '🎓 Welcome to School Agent! I can now read your files and search your code. Type your question and press Enter. Press Ctrl+C to exit.',
+        'Welcome to School Agent. Type your question and press Enter. Press Ctrl+C to exit.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -38,6 +40,48 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       setInput(prev => prev + inputChar);
     }
   });
+
+  const parseFileChanges = (result: string, toolName: string): Array<{fileName: string, lineChanges: string}> => {
+    const changes: Array<{fileName: string, lineChanges: string}> = [];
+    
+    // Match patterns for different tools
+    if (toolName === 'write_file' || toolName === 'edit_file' || toolName === 'search_replace') {
+      // Look for file paths and change counts
+      const fileMatch = result.match(/(?:Modified|Created|Edited|Updated)\s+(.+?)(?:\n|:)/);
+      const changesMatch = result.match(/\+(\d+)\s+-(\d+)/);
+      
+      if (fileMatch) {
+        const fileName = fileMatch[1].trim();
+        let lineChanges = '';
+        
+        if (changesMatch) {
+          const added = parseInt(changesMatch[1]);
+          const removed = parseInt(changesMatch[2]);
+          lineChanges = `+${added} -${removed}`;
+        } else {
+          // Check for just "Created" with size
+          const sizeMatch = result.match(/Size:\s+(\d+)\s+bytes/);
+          if (sizeMatch && result.includes('Created')) {
+            lineChanges = '+' + Math.ceil(parseInt(sizeMatch[1]) / 50); // Rough line estimate
+          }
+        }
+        
+        changes.push({ fileName, lineChanges });
+      }
+    } else if (toolName === 'apply_patch') {
+      const fileMatch = result.match(/Applied patch to\s+(.+?)(?:\n|$)/);
+      const changesMatch = result.match(/Changes:\s+\+(\d+)\s+-(\d+)/);
+      
+      if (fileMatch && changesMatch) {
+        changes.push({
+          fileName: fileMatch[1].trim(),
+          lineChanges: `+${changesMatch[1]} -${changesMatch[2]}`,
+        });
+      }
+    }
+    
+    return changes;
+  };
 
   const handleSubmit = async (userMessage: string) => {
     // Add user message
@@ -81,7 +125,11 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
           currentAssistantIndex = -1;
         } else if (chunk.type === 'tool_result') {
           setCurrentToolUse(null);
-          // Tool results are handled internally - optionally show completion
+          const result = chunk.toolResult || '';
+          
+          // Parse file changes from tool results
+          const fileChanges = parseFileChanges(result, chunk.toolName || '');
+          
           setMessages(prev => {
             const newMessages = [...prev];
             // Update the last tool message
@@ -89,6 +137,19 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
             if (lastToolIndex !== -1) {
               newMessages[lastToolIndex].content = `✓ ${newMessages[lastToolIndex].toolName} completed`;
             }
+            
+            // Add file change notifications
+            if (fileChanges.length > 0) {
+              fileChanges.forEach(change => {
+                newMessages.push({
+                  role: 'file_change',
+                  content: change.fileName,
+                  fileName: change.fileName,
+                  lineChanges: change.lineChanges,
+                });
+              });
+            }
+            
             return newMessages;
           });
         } else if (chunk.type === 'error') {
@@ -112,16 +173,12 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       {/* Header */}
       <Box borderStyle="round" borderColor="cyan" padding={1} marginBottom={1}>
         <Text bold color="cyan">
-          🎓 School Agent
+          School Agent
         </Text>
         <Text dimColor> | </Text>
         <Text dimColor>Claude Sonnet 4.5</Text>
         <Text dimColor> | </Text>
         <Text dimColor>~{agent.getTokenEstimate()} tokens</Text>
-        <Text dimColor> | </Text>
-        <Text color="green" dimColor>
-          📁 File Tools Active
-        </Text>
       </Box>
 
       {/* Messages */}
@@ -135,9 +192,9 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       {isProcessing && (
         <Box marginBottom={1}>
           {currentToolUse ? (
-            <Text color="yellow">⚙️  Executing: {currentToolUse}...</Text>
+            <Text color="yellow">Executing: {currentToolUse}...</Text>
           ) : (
-            <Text color="yellow">⏳ Thinking...</Text>
+            <Text color="yellow">Thinking...</Text>
           )}
         </Box>
       )}
@@ -171,6 +228,8 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
         return 'gray';
       case 'tool':
         return 'yellow';
+      case 'file_change':
+        return 'green';
       default:
         return 'white';
     }
@@ -179,17 +238,31 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
   const getPrefix = (role: string) => {
     switch (role) {
       case 'user':
-        return '👤 You: ';
+        return 'You: ';
       case 'assistant':
-        return '🤖 Agent: ';
+        return 'Agent: ';
       case 'system':
-        return 'ℹ️  ';
+        return '';
       case 'tool':
-        return '🔧 ';
+        return '';
+      case 'file_change':
+        return '';
       default:
         return '';
     }
   };
+
+  // Special rendering for file changes
+  if (message.role === 'file_change') {
+    return (
+      <Box marginBottom={0}>
+        <Text color="green" bold>{message.fileName}</Text>
+        {message.lineChanges && (
+          <Text color="green"> {message.lineChanges}</Text>
+        )}
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" marginBottom={1}>
