@@ -6,8 +6,12 @@ interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool' | 'file_change';
   content: string;
   toolName?: string;
+  toolInput?: any;
+  toolOutput?: string;
   fileName?: string;
   lineChanges?: string;
+  diffContent?: string;
+  executionTime?: string;
 }
 
 interface ChatUIProps {
@@ -41,17 +45,18 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
     }
   });
 
-  const parseFileChanges = (result: string, toolName: string): Array<{fileName: string, lineChanges: string}> => {
-    const changes: Array<{fileName: string, lineChanges: string}> = [];
+  const parseFileChanges = (result: string, toolName: string): Array<{fileName: string, lineChanges: string, diffContent?: string}> => {
+    const changes: Array<{fileName: string, lineChanges: string, diffContent?: string}> = [];
     
     // Match patterns for different tools
     if (toolName === 'write_file' || toolName === 'edit_file' || toolName === 'search_replace') {
       // Look for file paths and change counts
-      const fileMatch = result.match(/(?:Modified|Created|Edited|Updated)\s+(.+?)(?:\n|:)/);
+      const fileMatch = result.match(/(?:Modified|Created|Edited|Updated)\s+file:\s*(.+?)(?:\n|$)/i) ||
+                        result.match(/(?:Modified|Created|Edited|Updated)\s+(.+?)(?:\n|:)/);
       const changesMatch = result.match(/\+(\d+)\s+-(\d+)/);
       
       if (fileMatch) {
-        const fileName = fileMatch[1].trim();
+        const fileName = fileMatch[1].trim().replace(/\s+\(.*?\)$/, '');
         let lineChanges = '';
         
         if (changesMatch) {
@@ -62,20 +67,27 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
           // Check for just "Created" with size
           const sizeMatch = result.match(/Size:\s+(\d+)\s+bytes/);
           if (sizeMatch && result.includes('Created')) {
-            lineChanges = '+' + Math.ceil(parseInt(sizeMatch[1]) / 50); // Rough line estimate
+            const lines = Math.ceil(parseInt(sizeMatch[1]) / 50);
+            lineChanges = '+' + lines;
           }
         }
         
-        changes.push({ fileName, lineChanges });
+        // Extract diff content
+        const diffMatch = result.match(/---[\s\S]*?\+\+\+[\s\S]*?(?=\n\n|\n[A-Z]|$)/);
+        const diffContent = diffMatch ? diffMatch[0] : undefined;
+        
+        changes.push({ fileName, lineChanges, diffContent });
       }
     } else if (toolName === 'apply_patch') {
       const fileMatch = result.match(/Applied patch to\s+(.+?)(?:\n|$)/);
       const changesMatch = result.match(/Changes:\s+\+(\d+)\s+-(\d+)/);
       
       if (fileMatch && changesMatch) {
+        const diffMatch = result.match(/---[\s\S]*?\+\+\+[\s\S]*?(?=\n\n|\n[A-Z]|$)/);
         changes.push({
           fileName: fileMatch[1].trim(),
           lineChanges: `+${changesMatch[1]} -${changesMatch[2]}`,
+          diffContent: diffMatch ? diffMatch[0] : undefined,
         });
       }
     }
@@ -118,6 +130,7 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
               role: 'tool',
               content: `Using ${chunk.toolName}...`,
               toolName: chunk.toolName,
+              toolInput: chunk.toolInput,
             },
           ]);
           // Reset assistant message for next text block
@@ -132,10 +145,19 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
           
           setMessages(prev => {
             const newMessages = [...prev];
-            // Update the last tool message
+            // Update the last tool message with execution time and output
             const lastToolIndex = newMessages.findLastIndex(m => m.role === 'tool');
             if (lastToolIndex !== -1) {
-              newMessages[lastToolIndex].content = `✓ ${newMessages[lastToolIndex].toolName} completed`;
+              // Extract execution time from result if available
+              const timeMatch = result.match(/(\d+)s$/);
+              newMessages[lastToolIndex].executionTime = timeMatch ? timeMatch[1] + 's' : undefined;
+              
+              // Store the output for bash commands
+              if (newMessages[lastToolIndex].toolName === 'execute_bash') {
+                // Remove the execution time suffix from output
+                const output = result.replace(/\s+\d+s$/, '').trim();
+                newMessages[lastToolIndex].toolOutput = output;
+              }
             }
             
             // Add file change notifications
@@ -146,6 +168,7 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
                   content: change.fileName,
                   fileName: change.fileName,
                   lineChanges: change.lineChanges,
+                  diffContent: change.diffContent,
                 });
               });
             }
@@ -252,17 +275,202 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
     }
   };
 
-  // Special rendering for file changes
-  if (message.role === 'file_change') {
+  // Special rendering for tool execution (bash commands)
+  if (message.role === 'tool' && message.toolName === 'execute_bash' && message.toolInput) {
+    const command = message.toolInput.command;
+    const cwd = message.toolInput.cwd || process.cwd();
+    
     return (
-      <Box marginBottom={0}>
-        <Text color="green" bold>{message.fileName}</Text>
-        {message.lineChanges && (
-          <Text color="green"> {message.lineChanges}</Text>
+      <Box flexDirection="column" marginBottom={1}>
+        <Box>
+          <Text dimColor>$ </Text>
+          <Text dimColor>cd "{cwd}" && {command}</Text>
+          {message.executionTime && (
+            <Text dimColor> {message.executionTime}</Text>
+          )}
+        </Box>
+        {message.toolOutput && (
+          <Box flexDirection="column" paddingLeft={2}>
+            {message.toolOutput.split('\n').slice(0, 10).map((line, idx) => (
+              <Text key={idx} dimColor>
+                {line}
+              </Text>
+            ))}
+            {message.toolOutput.split('\n').length > 10 && (
+              <Text dimColor>… truncated ({message.toolOutput.split('\n').length - 10} more lines) · ctrl+o to expand</Text>
+            )}
+          </Box>
         )}
       </Box>
     );
   }
+
+  // Special rendering for file changes
+  if (message.role === 'file_change') {
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        <Box>
+          <Text color="green" bold>{message.fileName}</Text>
+          {message.lineChanges && (
+            <Text color="green"> {message.lineChanges}</Text>
+          )}
+        </Box>
+        {message.diffContent && (
+          <Box flexDirection="column" paddingLeft={2}>
+            {message.diffContent.split('\n').map((line, idx) => {
+              let color = 'white';
+              if (line.startsWith('+') && !line.startsWith('+++')) {
+                color = 'green';
+              } else if (line.startsWith('-') && !line.startsWith('---')) {
+                color = 'red';
+              } else if (line.startsWith('@@')) {
+                color = 'cyan';
+              } else {
+                color = 'gray';
+              }
+              return (
+                <Text key={idx} color={color as any}>
+                  {line}
+                </Text>
+              );
+            })}
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  const renderMarkdownText = (text: string, color: string) => {
+    const lines = text.split('\n');
+    const elements: JSX.Element[] = [];
+    let key = 0;
+
+    lines.forEach((line, lineIndex) => {
+      // Add line break for non-first lines
+      if (lineIndex > 0) {
+        elements.push(<Text key={`br-${key++}`}>{"\n"}</Text>);
+      }
+
+      // Check for headers
+      const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
+      if (headerMatch) {
+        const headerText = headerMatch[2];
+        elements.push(
+          <Text key={key++} bold color="cyan">
+            {headerText}
+          </Text>
+        );
+        return;
+      }
+
+      // Check for code blocks
+      if (line.startsWith('```')) {
+        elements.push(
+          <Text key={key++} color="gray" dimColor>
+            {line}
+          </Text>
+        );
+        return;
+      }
+
+      // Check for list items
+      const listMatch = line.match(/^(\s*)([-*+])\s+(.+)$/);
+      if (listMatch) {
+        const indent = listMatch[1];
+        const content = listMatch[3];
+        elements.push(
+          <Text key={key++} color="yellow">
+            {indent}• 
+          </Text>
+        );
+        elements.push(...renderInlineMarkdown(content, color, key));
+        key += 100; // Increment to avoid key conflicts
+        return;
+      }
+
+      // Regular line with inline markdown
+      if (line.trim()) {
+        elements.push(...renderInlineMarkdown(line, color, key));
+        key += 100; // Increment to avoid key conflicts
+      }
+    });
+
+    return <Text color={color as any}>{elements}</Text>;
+  };
+
+  const renderInlineMarkdown = (text: string, color: string, startKey: number = 0): JSX.Element[] => {
+    const parts: JSX.Element[] = [];
+    let key = startKey;
+
+    // Combined regex for bold, italic, and inline code
+    const inlineRegex = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)|(~~([^~]+)~~)/g;
+    let match;
+    let lastIndex = 0;
+
+    while ((match = inlineRegex.exec(text)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(
+          <Text key={key++} color={color as any}>
+            {text.substring(lastIndex, match.index)}
+          </Text>
+        );
+      }
+
+      // Determine which pattern matched and render accordingly
+      if (match[1]) {
+        // Bold **text**
+        parts.push(
+          <Text key={key++} bold color={color as any}>
+            {match[2]}
+          </Text>
+        );
+      } else if (match[3]) {
+        // Italic *text*
+        parts.push(
+          <Text key={key++} italic color={color as any}>
+            {match[4]}
+          </Text>
+        );
+      } else if (match[5]) {
+        // Inline code `text`
+        parts.push(
+          <Text key={key++} color="magenta" backgroundColor="black">
+            {match[6]}
+          </Text>
+        );
+      } else if (match[7]) {
+        // Strikethrough ~~text~~
+        parts.push(
+          <Text key={key++} strikethrough color={color as any}>
+            {match[8]}
+          </Text>
+        );
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(
+        <Text key={key++} color={color as any}>
+          {text.substring(lastIndex)}
+        </Text>
+      );
+    }
+
+    // If no markdown found, return plain text
+    if (parts.length === 0) {
+      parts.push(
+        <Text key={key} color={color as any}>
+          {text}
+        </Text>
+      );
+    }
+
+    return parts;
+  };
 
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -272,7 +480,7 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
         </Text>
       </Box>
       <Box paddingLeft={2}>
-        <Text color={getColor(message.role)}>{message.content}</Text>
+        {renderMarkdownText(message.content, getColor(message.role))}
       </Box>
     </Box>
   );

@@ -26,6 +26,8 @@ function isDangerousCommand(command: string): boolean {
 }
 
 async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult> {
+  const startTime = Date.now();
+  
   try {
     const { command, timeout, cwd } = params;
 
@@ -47,28 +49,32 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
       shell: '/bin/bash',
     });
 
+    const executionTime = Math.round((Date.now() - startTime) / 1000);
+
     // Combine stdout and stderr
     const output = [stdout, stderr].filter(Boolean).join('\n');
 
     if (!output) {
       return {
         success: true,
-        output: 'Command executed successfully (no output)',
+        output: `Command executed successfully (no output) ${executionTime}s`,
       };
     }
 
     return {
       success: true,
-      output: `$ ${command}\n\n${output}`,
+      output: `${output} ${executionTime}s`,
     };
   } catch (error: any) {
     logger.error(error, 'bash execution error');
+
+    const executionTime = Math.round((Date.now() - startTime) / 1000);
 
     // Handle timeout
     if (error.killed && error.signal === 'SIGTERM') {
       return {
         success: false,
-        error: `Command timed out after ${params.timeout}ms`,
+        error: `Command timed out after ${params.timeout}ms ${executionTime}s`,
       };
     }
 
@@ -77,13 +83,13 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
       const output = [error.stdout, error.stderr].filter(Boolean).join('\n');
       return {
         success: false,
-        error: `Command failed with exit code ${error.code}\n${output}`,
+        error: `Command failed with exit code ${error.code}\n${output} ${executionTime}s`,
       };
     }
 
     return {
       success: false,
-      error: error.message || 'Unknown error during command execution',
+      error: `${error.message || 'Unknown error during command execution'} ${executionTime}s`,
     };
   }
 }
