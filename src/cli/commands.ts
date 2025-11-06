@@ -6,6 +6,7 @@ import { ChatUI } from './ui.js';
 import { logger } from '../utils/logger.js';
 import type { AgentConfig } from '../types/config.js';
 import { createToolRegistry } from '../tools/index.js';
+import { setCanvasConfig } from '../tools/student/canvas.js';
 
 export function createProgram(config: AgentConfig) {
   const program = new Command();
@@ -21,6 +22,12 @@ export function createProgram(config: AgentConfig) {
     .option('-d, --directory <path>', 'Working directory', process.cwd())
     .action(async (options) => {
       try {
+        // Initialize Canvas config if available
+        if (config.canvas) {
+          setCanvasConfig(config.canvas);
+          logger.info('Canvas integration enabled');
+        }
+
         const toolRegistry = createToolRegistry();
         const agent = new AgentController(
           {
@@ -43,6 +50,11 @@ export function createProgram(config: AgentConfig) {
     .description('Run a single command and exit')
     .action(async (prompt: string) => {
       try {
+        // Initialize Canvas config if available
+        if (config.canvas) {
+          setCanvasConfig(config.canvas);
+        }
+
         const toolRegistry = createToolRegistry();
         const agent = new AgentController(config, toolRegistry);
         

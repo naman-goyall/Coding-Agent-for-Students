@@ -4,6 +4,10 @@ export interface AgentConfig {
     model: string;
     maxTokens: number;
   };
+  canvas?: {
+    domain: string;
+    accessToken: string;
+  };
   workingDirectory: string;
 }
 

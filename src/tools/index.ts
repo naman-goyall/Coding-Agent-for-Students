@@ -9,6 +9,7 @@ import { applyPatchTool } from './code/apply-patch.js';
 import { generatePatchTool } from './code/generate-patch.js';
 import { bashTool } from './system/bash.js';
 import { webSearchTool } from './system/web-search.js';
+import { canvasTool } from './student/canvas.js';
 
 export function createToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -28,6 +29,9 @@ export function createToolRegistry(): ToolRegistry {
   // Register system tools
   registry.register(bashTool);
   registry.register(webSearchTool);
+
+  // Register student tools
+  registry.register(canvasTool);
 
   return registry;
 }

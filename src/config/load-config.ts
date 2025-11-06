@@ -19,7 +19,11 @@ export function loadConfig(): AgentConfig {
     process.exit(1);
   }
 
-  return {
+  // Load Canvas config if available
+  const canvasDomain = process.env.CANVAS_DOMAIN;
+  const canvasAccessToken = process.env.CANVAS_ACCESS_TOKEN;
+
+  const config: AgentConfig = {
     anthropic: {
       apiKey,
       model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
@@ -27,5 +31,16 @@ export function loadConfig(): AgentConfig {
     },
     workingDirectory: DEFAULT_CONFIG.workingDirectory,
   };
+
+  // Add Canvas config if both domain and token are provided
+  if (canvasDomain && canvasAccessToken) {
+    config.canvas = {
+      domain: canvasDomain,
+      accessToken: canvasAccessToken,
+    };
+    logger.info('Canvas configuration loaded from environment');
+  }
+
+  return config;
 }
 
