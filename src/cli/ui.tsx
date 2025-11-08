@@ -749,14 +749,15 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
           let canvasSummary = '';
           switch (canvasAction) {
             case 'list_courses':
-              canvasSummary = 'Fetching your Canvas courses...';
+              canvasSummary = 'Listing your courses...';
               break;
-            case 'list_assignments':
-              const courseName = toolInput?.course_id ? `for course ${toolInput.course_id}` : '';
-              canvasSummary = `Listing assignments ${courseName}`;
+            case 'get_assignments':
+              canvasSummary = toolInput?.course_id
+                ? `Getting assignments for course ${toolInput.course_id}...`
+                : 'Getting all assignments...';
               break;
-            case 'get_assignment':
-              canvasSummary = `Getting assignment details (ID: ${toolInput?.assignment_id || 'unknown'})`;
+            case 'get_grades':
+              canvasSummary = 'Fetching your grades...';
               break;
             default:
               canvasSummary = `Action: ${canvasAction}`;
@@ -765,34 +766,51 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
             name: 'canvas',
             summary: canvasSummary,
           };
-        case 'notion_calendar':
-          const notionAction = toolInput?.action || 'unknown';
-          let notionSummary = '';
-          switch (notionAction) {
-            case 'create_event':
-              notionSummary = `Creating event: "${toolInput?.title || 'Untitled'}"`;
-              if (toolInput?.start_date) {
-                notionSummary += `\nDue: ${toolInput.start_date}`;
-              }
-              break;
+        case 'google_calendar':
+          const gcalAction = toolInput?.action || 'unknown';
+          let gcalSummary = '';
+          switch (gcalAction) {
             case 'list_events':
-              notionSummary = 'Listing calendar events...';
+              gcalSummary = 'Listing calendar events...';
               break;
-            case 'get_event':
-              notionSummary = `Getting event (ID: ${toolInput?.event_id || 'unknown'})`;
+            case 'create_event':
+              gcalSummary = `Creating event: "${toolInput?.title || 'Untitled'}"`;
               break;
             case 'update_event':
-              notionSummary = `Updating event (ID: ${toolInput?.event_id || 'unknown'})`;
+              gcalSummary = `Updating event: "${toolInput?.title || toolInput?.event_id}"`;
               break;
             case 'delete_event':
-              notionSummary = `Deleting event (ID: ${toolInput?.event_id || 'unknown'})`;
+              gcalSummary = `Deleting event (ID: ${toolInput?.event_id || 'unknown'})`;
               break;
             default:
-              notionSummary = `Action: ${notionAction}`;
+              gcalSummary = `Action: ${gcalAction}`;
           }
           return {
-            name: 'notion_calendar',
-            summary: notionSummary,
+            name: 'google_calendar',
+            summary: gcalSummary,
+          };
+        case 'google_docs':
+          const gdocsAction = toolInput?.action || 'unknown';
+          let gdocsSummary = '';
+          switch (gdocsAction) {
+            case 'create_document':
+              gdocsSummary = `Creating document: "${toolInput?.title || 'Untitled'}"`;
+              break;
+            case 'read_document':
+              gdocsSummary = `Reading document (ID: ${toolInput?.document_id || 'unknown'})`;
+              break;
+            case 'update_document':
+              gdocsSummary = `Updating document (ID: ${toolInput?.document_id || 'unknown'})`;
+              break;
+            case 'search_documents':
+              gdocsSummary = `Searching documents: "${toolInput?.query || ''}"`;
+              break;
+            default:
+              gdocsSummary = `Action: ${gdocsAction}`;
+          }
+          return {
+            name: 'google_docs',
+            summary: gdocsSummary,
           };
         default:
           return {

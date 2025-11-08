@@ -4,7 +4,7 @@
  * - File mentions: @filename.ts
  * - Directory mentions: @directory/
  * - File with line range: @filename.ts:10-20
- * - Tool mentions: @canvas, @notion, etc.
+ * - Tool mentions: @canvas, @deepwiki, @websearch, @googlecal, @googledocs, etc.
  */
 
 import { getAllToolNames } from './tool-mentions.js';

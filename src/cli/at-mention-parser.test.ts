@@ -206,13 +206,15 @@ describe('path escaping', () => {
 describe('tool validation', () => {
   it('should validate known tools', () => {
     expect(isValidTool('canvas')).toBe(true);
-    expect(isValidTool('notion')).toBe(true);
     expect(isValidTool('deepwiki')).toBe(true);
+    expect(isValidTool('websearch')).toBe(true);
+    expect(isValidTool('googlecal')).toBe(true);
+    expect(isValidTool('googledocs')).toBe(true);
   });
 
   it('should be case-insensitive', () => {
     expect(isValidTool('Canvas')).toBe(true);
-    expect(isValidTool('NOTION')).toBe(true);
+    expect(isValidTool('DEEPWIKI')).toBe(true);
   });
 
   it('should reject unknown tools', () => {

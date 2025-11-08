@@ -7,8 +7,6 @@ import { logger } from '../utils/logger.js';
 import type { AgentConfig } from '../types/config.js';
 import { createToolRegistry } from '../tools/index.js';
 import { setCanvasConfig } from '../tools/student/canvas.js';
-import { setNotionConfig } from '../tools/student/notion-calendar.js';
-import { setNotionNotesConfig } from '../tools/student/notion-notes.js';
 
 export function createProgram(config: AgentConfig) {
   const program = new Command();
@@ -28,18 +26,6 @@ export function createProgram(config: AgentConfig) {
         if (config.canvas) {
           setCanvasConfig(config.canvas);
           logger.info('Canvas integration enabled');
-        }
-
-        // Initialize Notion config if available
-        if (config.notion) {
-          setNotionConfig(config.notion);
-          logger.info('Notion calendar integration enabled');
-        }
-
-        // Initialize Notion Notes config if available
-        if (config.notionNotes) {
-          setNotionNotesConfig(config.notionNotes);
-          logger.info('Notion notes integration enabled');
         }
 
         const toolRegistry = createToolRegistry();
@@ -69,16 +55,6 @@ export function createProgram(config: AgentConfig) {
         // Initialize Canvas config if available
         if (config.canvas) {
           setCanvasConfig(config.canvas);
-        }
-
-        // Initialize Notion config if available
-        if (config.notion) {
-          setNotionConfig(config.notion);
-        }
-
-        // Initialize Notion Notes config if available
-        if (config.notionNotes) {
-          setNotionNotesConfig(config.notionNotes);
         }
 
         const toolRegistry = createToolRegistry();

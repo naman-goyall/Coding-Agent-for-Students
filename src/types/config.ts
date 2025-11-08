@@ -8,14 +8,6 @@ export interface AgentConfig {
     domain: string;
     accessToken: string;
   };
-  notion?: {
-    apiKey: string;
-    databaseId: string;
-  };
-  notionNotes?: {
-    apiKey: string;
-    defaultParentPageId?: string;
-  };
   workingDirectory: string;
 }
 

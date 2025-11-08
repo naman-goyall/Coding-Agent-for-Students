@@ -30,30 +30,6 @@ export const MENTIONABLE_TOOLS: ToolMention[] = [
     usage: 'Mention @canvas when asking about your courses, assignments, or grades',
   },
   {
-    name: 'notion',
-    description: 'Notion Notes',
-    icon: '📝',
-    capabilities: [
-      'Create and update notes',
-      'Search your notes',
-      'Organize information',
-      'Link related notes',
-    ],
-    usage: 'Mention @notion when you want to save information or search your notes',
-  },
-  {
-    name: 'notioncal',
-    description: 'Notion Calendar',
-    icon: '📅',
-    capabilities: [
-      'View your schedule',
-      'Check upcoming events',
-      'Find available time slots',
-      'Get event details',
-    ],
-    usage: 'Mention @notioncal when asking about your schedule or calendar',
-  },
-  {
     name: 'deepwiki',
     description: 'GitHub repo documentation',
     icon: '📖',
@@ -76,6 +52,32 @@ export const MENTIONABLE_TOOLS: ToolMention[] = [
       'Research topics',
     ],
     usage: 'Mention @websearch when you need current information from the web',
+  },
+  {
+    name: 'googlecal',
+    description: 'Google Calendar',
+    icon: '📅',
+    capabilities: [
+      'View your schedule and events',
+      'Create new calendar events',
+      'Update existing events',
+      'Check upcoming deadlines',
+      'Find available time slots',
+    ],
+    usage: 'Mention @googlecal when asking about your schedule or calendar',
+  },
+  {
+    name: 'googledocs',
+    description: 'Google Docs',
+    icon: '📝',
+    capabilities: [
+      'Create new documents',
+      'Read document content',
+      'Update existing documents',
+      'Search your documents',
+      'Organize notes and assignments',
+    ],
+    usage: 'Mention @googledocs when working with documents or notes',
   },
 ];
 
