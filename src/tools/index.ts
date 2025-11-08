@@ -13,6 +13,8 @@ import { canvasTool } from './student/canvas.js';
 import { notionCalendarTool } from './student/notion-calendar.js';
 import { notionNotesTool } from './student/notion-notes.js';
 import { deepwikiTool } from './student/deepwiki.js';
+import { googleCalendarTool } from './student/google-calendar.js';
+import { googleDocsTool } from './student/google-docs.js';
 
 export function createToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -38,6 +40,8 @@ export function createToolRegistry(): ToolRegistry {
   registry.register(notionCalendarTool);
   registry.register(notionNotesTool);
   registry.register(deepwikiTool);
+  registry.register(googleCalendarTool);
+  registry.register(googleDocsTool);
 
   return registry;
 }
