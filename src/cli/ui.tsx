@@ -54,66 +54,60 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
   const [atMentionFiles, setAtMentionFiles] = useState<FileEntry[]>([]);
   const [atMentionQuery, setAtMentionQuery] = useState('');
 
-  // Helper function to render input with colored @mentions
+  // Helper function to render input with cursor
   const renderInputWithMentions = (text: string, showCursor: boolean = false) => {
-    const mentions = parseAtMentions(text);
-    
-    if (mentions.length === 0) {
-      return (
-        <>
-          <Text color="#ffffff">{text}</Text>
-          {showCursor && <Text color="yellow" bold>█</Text>}
-        </>
-      );
-    }
-    
-    // Build a single string with all parts to avoid wrapping issues
-    // We'll use a Box with inline Text components that wrap properly
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    
-    mentions.forEach((mention, i) => {
-      // Add text before mention
-      if (mention.startIndex > lastIndex) {
-        parts.push(
-          <Text key={`text-${i}`} color="#ffffff">
-            {text.substring(lastIndex, mention.startIndex)}
-          </Text>
-        );
+    // Render text with @mention highlighting and a cursor that follows wrapping
+    // Strategy: build inline segments inside a single Text so Ink wraps them together
+    const mentions = parseAtMentions(text).sort((a, b) => a.startIndex - b.startIndex);
+    const current = getCurrentAtMention(text, text.length);
+
+    type Range = { start: number; end: number; isMention: boolean };
+    const ranges: Range[] = mentions.map(m => ({ start: m.startIndex, end: m.endIndex, isMention: true }));
+
+    // Include in-progress mention (if any) so it's highlighted while typing
+    if (current) {
+      const exists = ranges.some(r => r.start === current.startIndex && r.end === text.length);
+      if (!exists) {
+        ranges.push({ start: current.startIndex, end: text.length, isMention: true });
       }
-      
-      // Only color the mention if it's complete (followed by space)
-      // Don't color if it's at the end of input (still being typed)
-      const isComplete = mention.endIndex < text.length && text[mention.endIndex] === ' ';
-      
-      // Add colored mention (orange to match theme) only if complete
-      parts.push(
-        <Text key={`mention-${i}`} color={isComplete ? "#ff8800" : "#ffffff"}>
-          {mention.raw}
-        </Text>
-      );
-      
-      lastIndex = mention.endIndex;
-    });
-    
-    // Add remaining text after last mention
-    if (lastIndex < text.length) {
-      parts.push(
-        <Text key="text-end" color="#ffffff">
-          {text.substring(lastIndex)}
-        </Text>
-      );
     }
-    
-    // Add cursor at the end if needed
+
+    // Sort and merge any overlapping ranges just in case
+    ranges.sort((a, b) => a.start - b.start);
+    const merged: Range[] = [];
+    for (const r of ranges) {
+      if (merged.length === 0 || r.start > merged[merged.length - 1].end) {
+        merged.push({ ...r });
+      } else {
+        // Extend the previous range
+        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, r.end);
+      }
+    }
+
+    const segments: JSX.Element[] = [];
+    let idx = 0;
+    let key = 0;
+    for (const r of merged) {
+      if (r.start > idx) {
+        const plain = text.slice(idx, r.start);
+        if (plain) segments.push(<Text key={`p-${key++}`} color="#ffffff">{plain}</Text>);
+      }
+      const mentionText = text.slice(r.start, r.end);
+      if (mentionText) segments.push(<Text key={`m-${key++}`} color="#ff8800" bold>{mentionText}</Text>);
+      idx = r.end;
+    }
+    // Trailing plain text
+    if (idx < text.length) {
+      const tail = text.slice(idx);
+      if (tail) segments.push(<Text key={`p-${key++}`} color="#ffffff">{tail}</Text>);
+    }
+
+    // Append cursor inside the same Text flow so it follows wrapped content
     if (showCursor) {
-      parts.push(
-        <Text key="cursor" color="yellow" bold>█</Text>
-      );
+      segments.push(<Text key={`c-${key++}`} color="yellow" bold>█</Text>);
     }
-    
-    // Wrap in a Box to handle wrapping properly
-    return <Box flexWrap="wrap">{parts}</Box>;
+
+    return <Text color="#ffffff">{segments}</Text>;
   };
 
   useInput((inputChar, key) => {
