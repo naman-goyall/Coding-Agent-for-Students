@@ -12,15 +12,18 @@ const inputSchema = z.object({
     'list_pages',
   ]).describe('Action to perform'),
   page_id: z.string().optional().describe('Page ID for get/update/append actions'),
-  parent_page_id: z.string().optional().describe('Parent page ID when creating a new page'),
+  parent_page_id: z.string().optional().describe('Parent page ID when creating a new page under a page'),
+  parent_database_id: z.string().optional().describe('Parent database ID when creating a new page in a database'),
   title: z.string().optional().describe('Page title'),
   content: z.string().optional().describe('Page content (markdown format)'),
   query: z.string().optional().describe('Search query for finding pages'),
   max_results: z.number().default(10).describe('Maximum number of results to return'),
+  properties: z.record(z.any()).optional().describe('Database properties when creating a page in a database'),
 });
 
 interface NotionNotesConfig {
   apiKey: string;
+  defaultParentPageId?: string;
   workspaceId?: string;
 }
 
@@ -76,6 +79,104 @@ class NotionNotesClient {
     }
   }
 
+  // Parse inline markdown formatting (bold, italic, links, etc.) to Notion rich text
+  private parseInlineMarkdown(text: string): any[] {
+    const richText: any[] = [];
+    
+    // Regex patterns for inline markdown
+    const patterns = [
+      { regex: /\*\*(.+?)\*\*/g, type: 'bold' },           // **bold**
+      { regex: /\*(.+?)\*/g, type: 'italic' },             // *italic*
+      { regex: /\[(.+?)\]\((.+?)\)/g, type: 'link' },      // [text](url)
+      { regex: /`(.+?)`/g, type: 'code' },                 // `code`
+      { regex: /~~(.+?)~~/g, type: 'strikethrough' },      // ~~strikethrough~~
+    ];
+    
+    // Find all matches
+    const matches: Array<{ start: number; end: number; type: string; text: string; url?: string }> = [];
+    
+    for (const pattern of patterns) {
+      const regex = new RegExp(pattern.regex.source, 'g');
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        if (pattern.type === 'link') {
+          matches.push({
+            start: match.index,
+            end: match.index + match[0].length,
+            type: pattern.type,
+            text: match[1],
+            url: match[2],
+          });
+        } else {
+          matches.push({
+            start: match.index,
+            end: match.index + match[0].length,
+            type: pattern.type,
+            text: match[1],
+          });
+        }
+      }
+    }
+    
+    // Sort matches by start position
+    matches.sort((a, b) => a.start - b.start);
+    
+    // Remove overlapping matches (keep first one)
+    const filteredMatches: typeof matches = [];
+    let lastEnd = 0;
+    for (const match of matches) {
+      if (match.start >= lastEnd) {
+        filteredMatches.push(match);
+        lastEnd = match.end;
+      }
+    }
+    
+    // Build rich text array
+    let pos = 0;
+    for (const match of filteredMatches) {
+      // Add plain text before this match
+      if (match.start > pos) {
+        const plainText = text.substring(pos, match.start);
+        if (plainText) {
+          richText.push({ type: 'text', text: { content: plainText } });
+        }
+      }
+      
+      // Add formatted text
+      const textObj: any = { type: 'text', text: { content: match.text } };
+      
+      if (match.type === 'bold') {
+        textObj.annotations = { bold: true };
+      } else if (match.type === 'italic') {
+        textObj.annotations = { italic: true };
+      } else if (match.type === 'code') {
+        textObj.annotations = { code: true };
+      } else if (match.type === 'strikethrough') {
+        textObj.annotations = { strikethrough: true };
+      } else if (match.type === 'link' && match.url) {
+        textObj.text.link = { url: match.url };
+      }
+      
+      richText.push(textObj);
+      pos = match.end;
+    }
+    
+    // Add remaining plain text
+    if (pos < text.length) {
+      const plainText = text.substring(pos);
+      if (plainText) {
+        richText.push({ type: 'text', text: { content: plainText } });
+      }
+    }
+    
+    // If no matches found, return plain text
+    if (richText.length === 0) {
+      richText.push({ type: 'text', text: { content: text } });
+    }
+    
+    return richText;
+  }
+
   // Convert markdown to Notion blocks
   private markdownToBlocks(markdown: string): any[] {
     const blocks: any[] = [];
@@ -96,7 +197,7 @@ class NotionNotesClient {
           object: 'block',
           type: 'heading_1',
           heading_1: {
-            rich_text: [{ type: 'text', text: { content: line.substring(2) } }],
+            rich_text: this.parseInlineMarkdown(line.substring(2)),
           },
         });
       } else if (line.startsWith('## ')) {
@@ -104,7 +205,7 @@ class NotionNotesClient {
           object: 'block',
           type: 'heading_2',
           heading_2: {
-            rich_text: [{ type: 'text', text: { content: line.substring(3) } }],
+            rich_text: this.parseInlineMarkdown(line.substring(3)),
           },
         });
       } else if (line.startsWith('### ')) {
@@ -112,7 +213,20 @@ class NotionNotesClient {
           object: 'block',
           type: 'heading_3',
           heading_3: {
-            rich_text: [{ type: 'text', text: { content: line.substring(4) } }],
+            rich_text: this.parseInlineMarkdown(line.substring(4)),
+          },
+        });
+      }
+      // Checkbox list (to-do items)
+      else if (line.startsWith('- [ ] ') || line.startsWith('- [x] ') || line.startsWith('- [X] ')) {
+        const isChecked = line.startsWith('- [x] ') || line.startsWith('- [X] ');
+        const content = line.substring(6); // Remove "- [ ] " or "- [x] "
+        blocks.push({
+          object: 'block',
+          type: 'to_do',
+          to_do: {
+            rich_text: this.parseInlineMarkdown(content),
+            checked: isChecked,
           },
         });
       }
@@ -122,7 +236,7 @@ class NotionNotesClient {
           object: 'block',
           type: 'bulleted_list_item',
           bulleted_list_item: {
-            rich_text: [{ type: 'text', text: { content: line.substring(2) } }],
+            rich_text: this.parseInlineMarkdown(line.substring(2)),
           },
         });
       }
@@ -133,7 +247,7 @@ class NotionNotesClient {
           object: 'block',
           type: 'numbered_list_item',
           numbered_list_item: {
-            rich_text: [{ type: 'text', text: { content } }],
+            rich_text: this.parseInlineMarkdown(content),
           },
         });
       }
@@ -161,7 +275,7 @@ class NotionNotesClient {
           object: 'block',
           type: 'quote',
           quote: {
-            rich_text: [{ type: 'text', text: { content: line.substring(2) } }],
+            rich_text: this.parseInlineMarkdown(line.substring(2)),
           },
         });
       }
@@ -171,7 +285,7 @@ class NotionNotesClient {
           object: 'block',
           type: 'paragraph',
           paragraph: {
-            rich_text: [{ type: 'text', text: { content: line } }],
+            rich_text: this.parseInlineMarkdown(line),
           },
         });
       }
@@ -235,28 +349,79 @@ class NotionNotesClient {
     return lines.join('\n').trim();
   }
 
+  // Get data source ID from database ID (API version 2025-09-03)
+  async getDataSourceId(databaseId: string): Promise<string> {
+    const database = await this.makeRequest(`/databases/${databaseId}`);
+    
+    if (!database.data_sources || database.data_sources.length === 0) {
+      throw new Error(`No data sources found for database ${databaseId}`);
+    }
+    
+    // Return the first data source ID (most databases have only one)
+    return database.data_sources[0].id;
+  }
+
   async createPage(params: {
     parentPageId?: string;
+    parentDatabaseId?: string;
     title: string;
     content?: string;
+    properties?: Record<string, any>;
   }): Promise<any> {
-    const parent = params.parentPageId
-      ? { page_id: params.parentPageId }
-      : { type: 'workspace', workspace: true };
+    if (!params.parentPageId && !params.parentDatabaseId) {
+      throw new Error(
+        'Either parent_page_id or parent_database_id is required to create a page. ' +
+        'Use list_pages or search_pages to find a parent page, ' +
+        'or provide a database ID to create a page in a database.'
+      );
+    }
 
     const body: any = {
-      parent,
-      properties: {
-        title: {
+      properties: {},
+    };
+
+    // Set parent - either page or database (via data source)
+    if (params.parentDatabaseId) {
+      // For database parent, we need to get the data source ID first
+      const dataSourceId = await this.getDataSourceId(params.parentDatabaseId);
+      body.parent = {
+        type: 'data_source_id',
+        data_source_id: dataSourceId,
+      };
+      
+      // For database pages, use custom properties if provided
+      if (params.properties) {
+        body.properties = params.properties;
+      }
+      
+      // Add title to properties (database pages use Name or title property)
+      if (!body.properties.title && !body.properties.Name) {
+        body.properties.title = {
           title: [
             {
               type: 'text',
               text: { content: params.title },
             },
           ],
-        },
-      },
-    };
+        };
+      }
+    } else {
+      // For page parent
+      body.parent = {
+        type: 'page_id',
+        page_id: params.parentPageId,
+      };
+      
+      // For regular pages, only title property is allowed
+      body.properties.title = {
+        title: [
+          {
+            type: 'text',
+            text: { content: params.title },
+          },
+        ],
+      };
+    }
 
     // Add content blocks if provided
     if (params.content) {
@@ -415,15 +580,33 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
           };
         }
 
+        // Use provided parent IDs or fall back to default parent page ID from config
+        const parentPageId = params.parent_page_id || notionNotesConfig?.defaultParentPageId;
+        const parentDatabaseId = params.parent_database_id;
+
+        if (!parentPageId && !parentDatabaseId) {
+          return {
+            success: false,
+            error: 'Either parent_page_id or parent_database_id is required for create_page action. ' +
+                   'You can set a default parent page ID in your .env file with NOTION_NOTES_PARENT_PAGE_ID, ' +
+                   'or provide parent_page_id/parent_database_id in the request.',
+          };
+        }
+
         const page = await client.createPage({
-          parentPageId: params.parent_page_id,
+          parentPageId,
+          parentDatabaseId,
           title: params.title,
           content: params.content,
+          properties: params.properties,
         });
+
+        const usingDefault = !params.parent_page_id && !params.parent_database_id && parentPageId;
+        const parentInfo = usingDefault ? ' (using default parent page)' : '';
 
         return {
           success: true,
-          output: `Page created successfully!\n\n${formatPage(page)}`,
+          output: `Page created successfully${parentInfo}!\n\n${formatPage(page)}`,
         };
       }
 
@@ -518,15 +701,22 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
 
 export const notionNotesTool: Tool = {
   name: 'notion_notes',
-  description: `Create and manage notes pages in Notion workspace.
+  description: `Create and manage notes pages in Notion workspace. Uses Notion API version 2025-09-03 with database support.
   
 Available actions:
-- create_page: Create a new page (requires title; optional: parent_page_id, content in markdown)
+- create_page: Create a new page (requires title; optional: parent_page_id, parent_database_id, content in markdown, properties for database pages)
 - get_page: Get page details and content (requires page_id)
 - update_page: Update page title (requires page_id; optional: title)
 - append_content: Add content to existing page (requires page_id, content in markdown)
 - search_pages: Search for pages by query (requires query; optional: max_results)
 - list_pages: List recent pages (optional: max_results)
+
+Creating pages:
+- If NOTION_NOTES_PARENT_PAGE_ID is set in .env, pages will be created there by default (no parent_page_id needed)
+- To create a page under a specific page: provide parent_page_id
+- To create a page in a database: provide parent_database_id
+- For database pages, you can also provide custom properties object to set database fields
+- Use list_pages or search_pages to find parent page IDs
 
 Content should be in markdown format. Supports:
 - Headers (# ## ###)

@@ -27,6 +27,10 @@ export function loadConfig(): AgentConfig {
   const notionApiKey = process.env.NOTION_API_KEY;
   const notionDatabaseId = process.env.NOTION_DATABASE_ID;
 
+  // Load Notion Notes config if available
+  const notionNotesApiKey = process.env.NOTION_NOTES_API_KEY || notionApiKey;
+  const notionNotesParentPageId = process.env.NOTION_NOTES_PARENT_PAGE_ID;
+
   const config: AgentConfig = {
     anthropic: {
       apiKey,
@@ -52,6 +56,18 @@ export function loadConfig(): AgentConfig {
       databaseId: notionDatabaseId,
     };
     logger.info('Notion calendar configuration loaded from environment');
+  }
+
+  // Add Notion Notes config if API key is provided
+  if (notionNotesApiKey) {
+    config.notionNotes = {
+      apiKey: notionNotesApiKey,
+      defaultParentPageId: notionNotesParentPageId,
+    };
+    logger.info('Notion notes configuration loaded from environment');
+    if (notionNotesParentPageId) {
+      logger.info(`Default parent page ID set: ${notionNotesParentPageId}`);
+    }
   }
 
   return config;

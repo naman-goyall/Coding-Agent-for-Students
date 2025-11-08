@@ -12,6 +12,10 @@ export interface AgentConfig {
     apiKey: string;
     databaseId: string;
   };
+  notionNotes?: {
+    apiKey: string;
+    defaultParentPageId?: string;
+  };
   workingDirectory: string;
 }
 

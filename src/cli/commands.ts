@@ -33,8 +33,13 @@ export function createProgram(config: AgentConfig) {
         // Initialize Notion config if available
         if (config.notion) {
           setNotionConfig(config.notion);
-          setNotionNotesConfig({ apiKey: config.notion.apiKey });
-          logger.info('Notion calendar and notes integration enabled');
+          logger.info('Notion calendar integration enabled');
+        }
+
+        // Initialize Notion Notes config if available
+        if (config.notionNotes) {
+          setNotionNotesConfig(config.notionNotes);
+          logger.info('Notion notes integration enabled');
         }
 
         const toolRegistry = createToolRegistry();
@@ -69,7 +74,11 @@ export function createProgram(config: AgentConfig) {
         // Initialize Notion config if available
         if (config.notion) {
           setNotionConfig(config.notion);
-          setNotionNotesConfig({ apiKey: config.notion.apiKey });
+        }
+
+        // Initialize Notion Notes config if available
+        if (config.notionNotes) {
+          setNotionNotesConfig(config.notionNotes);
         }
 
         const toolRegistry = createToolRegistry();
