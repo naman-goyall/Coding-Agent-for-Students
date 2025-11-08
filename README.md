@@ -7,6 +7,7 @@ AI coding assistant for students built with Claude Sonnet 4.5
 - 🤖 Powered by Claude Sonnet 4.5
 - 💬 Interactive terminal UI with streaming responses
 - ⚡ **Slash Commands** - Quick commands for session control (`/clear`, `/exit`, `/help`)
+- 🎯 **@Mentions** - Reference files, directories, and tools in your prompts
 - 📁 **File System Tools**
   - Browse project directories
   - Read files with line numbers
@@ -79,6 +80,48 @@ Control your chat session with built-in commands. Type `/` to see autocomplete s
 - Then press Enter again to execute the command
 
 See [SLASH_COMMANDS.md](./SLASH_COMMANDS.md) for complete documentation.
+
+### @Mentions
+
+Reference files, directories, and tools directly in your prompts. Type `@` to see autocomplete suggestions:
+
+```bash
+# Mention a file - agent receives full file content
+"Explain @src/cli/ui.tsx"
+
+# Mention specific lines
+"What does @src/cli/ui.tsx:50-100 do?"
+
+# Mention a directory - agent receives file listing
+"What's in @src/cli/"
+
+# Mention a tool - incentivizes agent to use it
+"Get my assignments @canvas"
+
+# Multiple mentions
+"Compare @file1.ts and @file2.ts using @deepwiki"
+```
+
+**Available Tools to Mention:**
+- 📚 `@canvas` - Canvas LMS (courses, assignments, grades)
+- 📝 `@notion` - Notion Notes
+- 📅 `@notioncal` - Notion Calendar
+- 📖 `@deepwiki` - GitHub repository documentation
+- 🔍 `@websearch` - Web search
+
+**Autocomplete Navigation:**
+- Type `@` to see files, directories, and tools
+- ↑/↓ arrows to navigate
+- Tab or Enter to select (adds space, turns orange)
+- Continue typing to filter results
+- Esc to cancel
+
+**Features:**
+- Files are automatically read and added to context
+- Directories show sorted listings with file sizes
+- Tools descriptions are added to prompt the agent
+- Supports line ranges for large files
+- Orange highlighting for completed mentions
 
 ### Using DeepWiki
 

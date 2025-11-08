@@ -167,17 +167,49 @@ Use edit_file or search_replace to make precise changes and show diffs. Use gene
       // Agentic loop: keep going until we get a final response
       let continueLoop = true;
       let iterationCount = 0;
-      const maxIterations = 10;
+      const maxIterations = 25;
 
       while (continueLoop && iterationCount < maxIterations) {
         iterationCount++;
+
+        // Get messages and ensure all non-final assistant messages have content
+        // Anthropic API requires: "all messages must have non-empty content except for the optional final assistant message"
+        const messages = this.conversation.getMessages();
+        const filteredMessages = messages.map((msg, index) => {
+          // If it's an assistant message with content array
+          if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+            // Check if it has any text blocks with actual content
+            const hasTextContent = msg.content.some(
+              (block: any) => block.type === 'text' && block.text && block.text.trim().length > 0
+            );
+            
+            // Check if it has any tool use blocks
+            const hasToolUse = msg.content.some(
+              (block: any) => block.type === 'tool_use'
+            );
+            
+            // If it's not the final message, has tool uses but no text, add minimal placeholder
+            // This satisfies Anthropic's API requirement without affecting agent behavior
+            const isFinalMessage = index === messages.length - 1;
+            if (!isFinalMessage && hasToolUse && !hasTextContent) {
+              return {
+                ...msg,
+                content: [
+                  { type: 'text' as const, text: ' ' },
+                  ...msg.content,
+                ],
+              };
+            }
+          }
+          return msg;
+        });
 
         // Create API request
         const response = await this.client.messages.create({
           model: this.config.anthropic.model,
           max_tokens: this.config.anthropic.maxTokens,
           system: this.systemPrompt,
-          messages: this.conversation.getMessages(),
+          messages: filteredMessages,
           tools: this.toolRegistry.getAnthropicTools(),
         });
 

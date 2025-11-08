@@ -3,6 +3,10 @@ import { Box, Text, useInput, useApp, Static } from 'ink';
 import type { AgentController } from '../agent/controller.js';
 import { executeSlashCommand, type CommandContext } from './slash-commands.js';
 import { CommandSuggestions, getCommandSuggestions } from './command-suggestions.js';
+import { AtMentionSuggestions, filterTools } from './at-mention-suggestions.js';
+import { getCurrentAtMention, parseAtMentions } from './at-mention-parser.js';
+import { getMatchingFiles, type FileEntry } from '../utils/file-scanner.js';
+import { buildContextFromMentions, formatMessageWithContext } from '../agent/context-builder.js';
 
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool' | 'file_change';
@@ -46,6 +50,71 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
   const [totalTokens, setTotalTokens] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [showAtMentions, setShowAtMentions] = useState(false);
+  const [atMentionFiles, setAtMentionFiles] = useState<FileEntry[]>([]);
+  const [atMentionQuery, setAtMentionQuery] = useState('');
+
+  // Helper function to render input with colored @mentions
+  const renderInputWithMentions = (text: string, showCursor: boolean = false) => {
+    const mentions = parseAtMentions(text);
+    
+    if (mentions.length === 0) {
+      return (
+        <>
+          <Text color="#ffffff">{text}</Text>
+          {showCursor && <Text color="yellow" bold>█</Text>}
+        </>
+      );
+    }
+    
+    // Build a single string with all parts to avoid wrapping issues
+    // We'll use a Box with inline Text components that wrap properly
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    
+    mentions.forEach((mention, i) => {
+      // Add text before mention
+      if (mention.startIndex > lastIndex) {
+        parts.push(
+          <Text key={`text-${i}`} color="#ffffff">
+            {text.substring(lastIndex, mention.startIndex)}
+          </Text>
+        );
+      }
+      
+      // Only color the mention if it's complete (followed by space)
+      // Don't color if it's at the end of input (still being typed)
+      const isComplete = mention.endIndex < text.length && text[mention.endIndex] === ' ';
+      
+      // Add colored mention (orange to match theme) only if complete
+      parts.push(
+        <Text key={`mention-${i}`} color={isComplete ? "#ff8800" : "#ffffff"}>
+          {mention.raw}
+        </Text>
+      );
+      
+      lastIndex = mention.endIndex;
+    });
+    
+    // Add remaining text after last mention
+    if (lastIndex < text.length) {
+      parts.push(
+        <Text key="text-end" color="#ffffff">
+          {text.substring(lastIndex)}
+        </Text>
+      );
+    }
+    
+    // Add cursor at the end if needed
+    if (showCursor) {
+      parts.push(
+        <Text key="cursor" color="yellow" bold>█</Text>
+      );
+    }
+    
+    // Wrap in a Box to handle wrapping properly
+    return <Box flexWrap="wrap">{parts}</Box>;
+  };
 
   useInput((inputChar, key) => {
     if (isProcessing) return;
@@ -59,8 +128,8 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       }
     }
 
-    // Handle arrow keys for suggestion navigation
-    if (showSuggestions) {
+    // Handle arrow keys for suggestion navigation (slash commands)
+    if (showSuggestions && !showAtMentions) {
       const suggestions = getCommandSuggestions(input);
       
       if (key.upArrow) {
@@ -89,6 +158,55 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       }
     }
 
+    // Handle arrow keys for @mention navigation
+    if (showAtMentions) {
+      const tools = filterTools(atMentionQuery);
+      const totalSuggestions = tools.length + atMentionFiles.length;
+      
+      if (key.upArrow) {
+        setSelectedSuggestionIndex(prev => 
+          prev > 0 ? prev - 1 : totalSuggestions - 1
+        );
+        return;
+      }
+      
+      if (key.downArrow) {
+        setSelectedSuggestionIndex(prev => 
+          prev < totalSuggestions - 1 ? prev + 1 : 0
+        );
+        return;
+      }
+      
+      // Handle tab or enter to select @mention
+      if (key.tab || key.return) {
+        if (totalSuggestions > 0) {
+          const currentMention = getCurrentAtMention(input, input.length);
+          if (currentMention) {
+            let selectedItem: string;
+            
+            // Determine if selection is a tool or file
+            if (selectedSuggestionIndex < tools.length) {
+              // Selected a tool
+              selectedItem = tools[selectedSuggestionIndex].name;
+            } else {
+              // Selected a file
+              const fileIndex = selectedSuggestionIndex - tools.length;
+              const file = atMentionFiles[fileIndex];
+              selectedItem = file.type === 'directory' ? `${file.path}/` : file.path;
+            }
+            
+            // Replace the current @mention with the selected item + space
+            const beforeMention = input.substring(0, currentMention.startIndex);
+            const afterMention = input.substring(input.length);
+            setInput(`${beforeMention}@${selectedItem} ${afterMention}`);
+            setShowAtMentions(false);
+            setSelectedSuggestionIndex(0);
+            return;
+          }
+        }
+      }
+    }
+
     if (key.return) {
       if (input.trim()) {
         handleSubmit(input.trim());
@@ -110,6 +228,22 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
           setSelectedSuggestionIndex(0);
         }
         
+        // Check for @mention
+        const currentMention = getCurrentAtMention(newInput, newInput.length);
+        if (currentMention) {
+          const query = currentMention.text.slice(1); // Remove @
+          setAtMentionQuery(query);
+          setShowAtMentions(true);
+          setSelectedSuggestionIndex(0);
+          
+          // Fetch matching files
+          const workspaceRoot = process.cwd();
+          const files = getMatchingFiles(workspaceRoot, query, 10);
+          setAtMentionFiles(files);
+        } else {
+          setShowAtMentions(false);
+        }
+        
         return newInput;
       });
     } else if (!key.ctrl && !key.meta && inputChar) {
@@ -123,6 +257,22 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
         } else if (newInput.startsWith('/') && showSuggestions) {
           // Reset selection when query changes
           setSelectedSuggestionIndex(0);
+        }
+        
+        // Check for @mention
+        const currentMention = getCurrentAtMention(newInput, newInput.length);
+        if (currentMention) {
+          const query = currentMention.text.slice(1); // Remove @
+          setAtMentionQuery(query);
+          setShowAtMentions(true);
+          setSelectedSuggestionIndex(0);
+          
+          // Fetch matching files
+          const workspaceRoot = process.cwd();
+          const files = getMatchingFiles(workspaceRoot, query, 10);
+          setAtMentionFiles(files);
+        } else {
+          setShowAtMentions(false);
         }
         
         return newInput;
@@ -185,7 +335,6 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
     if (userMessage.startsWith('/')) {
       // Show the command as a user message first
       setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-      
       const commandContext: CommandContext = {
         clearMessages: () => {
           setMessages([]);
@@ -224,16 +373,48 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       return;
     }
 
-    // Add user message
+    // Regular chat message - check for @mentions and build context
+    const workspaceRoot = process.cwd();
+    const { context, attachments } = buildContextFromMentions(userMessage, workspaceRoot);
+    
+    // Format message with context if there are @mentions
+    const messageToSend = context ? formatMessageWithContext(userMessage, context) : userMessage;
+    
+    // Show original user message in UI (without context)
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    
+    // If there are attachments, show what was loaded
+    if (attachments.length > 0) {
+      const attachmentSummary = attachments
+        .map(att => {
+          if (att.type === 'file') {
+            return att.lineRange 
+              ? `📄 ${att.path} (lines ${att.lineRange.start}-${att.lineRange.end})`
+              : `📄 ${att.path}`;
+          } else if (att.type === 'directory') {
+            return `📁 ${att.path}`;
+          } else if (att.type === 'tool') {
+            return `🔧 ${att.toolName}`;
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .join(', ');
+      
+      setMessages(prev => [...prev, { 
+        role: 'system', 
+        content: `Loaded: ${attachmentSummary}` 
+      }]);
+    }
+    
     setIsProcessing(true);
 
     try {
       let assistantMessage = '';
       let currentAssistantIndex = -1;
 
-      // Stream response
-      for await (const chunk of agent.chat(userMessage)) {
+      // Stream response (send messageToSend which includes context)
+      for await (const chunk of agent.chat(messageToSend)) {
         if (chunk.type === 'content' && chunk.content) {
           assistantMessage += chunk.content;
           // Update the assistant message in real-time
@@ -381,10 +562,7 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
             <Box>
               <Text color="#ff8800" bold>→ </Text>
               {input.length > 0 ? (
-                <>
-                  <Text color="#ffffff">{input}</Text>
-                  <Text color="yellow" bold>█</Text>
-                </>
+                renderInputWithMentions(input, true)
               ) : (
                 <>
                   <Text color="yellow" bold>█</Text>
@@ -396,10 +574,20 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
         </Box>
         
         {/* Command Suggestions - below input */}
-        {showSuggestions && input.startsWith('/') && !isProcessing && (
+        {showSuggestions && input.startsWith('/') && !isProcessing && !showAtMentions && (
           <CommandSuggestions 
             query={input} 
             selectedIndex={selectedSuggestionIndex}
+          />
+        )}
+        
+        {/* At-mention Suggestions - below input */}
+        {showAtMentions && !isProcessing && (
+          <AtMentionSuggestions 
+            files={atMentionFiles}
+            tools={filterTools(atMentionQuery)}
+            selectedIndex={selectedSuggestionIndex}
+            query={atMentionQuery}
           />
         )}
         
@@ -561,6 +749,56 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
           return {
             name: 'SearchFiles',
             summary: toolInput?.query || 'Searched files',
+          };
+        case 'canvas':
+          const canvasAction = toolInput?.action || 'unknown';
+          let canvasSummary = '';
+          switch (canvasAction) {
+            case 'list_courses':
+              canvasSummary = 'Fetching your Canvas courses...';
+              break;
+            case 'list_assignments':
+              const courseName = toolInput?.course_id ? `for course ${toolInput.course_id}` : '';
+              canvasSummary = `Listing assignments ${courseName}`;
+              break;
+            case 'get_assignment':
+              canvasSummary = `Getting assignment details (ID: ${toolInput?.assignment_id || 'unknown'})`;
+              break;
+            default:
+              canvasSummary = `Action: ${canvasAction}`;
+          }
+          return {
+            name: 'canvas',
+            summary: canvasSummary,
+          };
+        case 'notion_calendar':
+          const notionAction = toolInput?.action || 'unknown';
+          let notionSummary = '';
+          switch (notionAction) {
+            case 'create_event':
+              notionSummary = `Creating event: "${toolInput?.title || 'Untitled'}"`;
+              if (toolInput?.start_date) {
+                notionSummary += `\nDue: ${toolInput.start_date}`;
+              }
+              break;
+            case 'list_events':
+              notionSummary = 'Listing calendar events...';
+              break;
+            case 'get_event':
+              notionSummary = `Getting event (ID: ${toolInput?.event_id || 'unknown'})`;
+              break;
+            case 'update_event':
+              notionSummary = `Updating event (ID: ${toolInput?.event_id || 'unknown'})`;
+              break;
+            case 'delete_event':
+              notionSummary = `Deleting event (ID: ${toolInput?.event_id || 'unknown'})`;
+              break;
+            default:
+              notionSummary = `Action: ${notionAction}`;
+          }
+          return {
+            name: 'notion_calendar',
+            summary: notionSummary,
           };
         default:
           return {

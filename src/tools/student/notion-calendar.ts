@@ -14,8 +14,8 @@ const inputSchema = z.object({
   title: z.string().optional().describe('Event title'),
   description: z.string().optional().describe('Event description'),
   location: z.string().optional().describe('Event location'),
-  start_date: z.string().optional().describe('Event start date/time (ISO 8601 format)'),
-  end_date: z.string().optional().describe('Event end date/time (ISO 8601 format)'),
+  start_date: z.string().optional().describe('Event start date/time in format YYYY-MM-DDTHH:MM:SS (WITHOUT timezone offset, e.g., 2025-11-12T23:59:59)'),
+  end_date: z.string().optional().describe('Event end date/time in format YYYY-MM-DDTHH:MM:SS (WITHOUT timezone offset, e.g., 2025-11-12T23:59:59)'),
   tags: z.array(z.string()).optional().describe('Event tags/categories'),
   max_results: z.number().default(10).describe('Maximum number of events to return'),
 });
@@ -355,6 +355,22 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
           };
         }
 
+        // Get the local timezone in IANA format (e.g., "America/New_York")
+        const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        // Format date for Notion - keep as-is without timezone conversion
+        const formatDateForNotion = (dateStr: string): string => {
+          // If already has timezone info, strip it since we'll use time_zone field
+          if (dateStr.endsWith('Z')) {
+            return dateStr.slice(0, -1);
+          }
+          if (/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+            return dateStr.replace(/[+-]\d{2}:\d{2}$/, '');
+          }
+          // Return as-is (should be in format: 2025-11-12T23:59:59)
+          return dateStr;
+        };
+
         const properties: any = {
           Name: {
             title: [
@@ -367,8 +383,9 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
           },
           Date: {
             date: {
-              start: params.start_date,
-              end: params.end_date || null,
+              start: formatDateForNotion(params.start_date),
+              end: params.end_date ? formatDateForNotion(params.end_date) : null,
+              time_zone: localTimezone,
             },
           },
         };
@@ -523,7 +540,8 @@ Available actions:
 - update_event: Update an existing event (requires event_id; optional: title, description, location, start_date, end_date, tags)
 - delete_event: Archive an event (requires event_id)
 
-Dates should be in ISO 8601 format (e.g., "2025-11-06T14:00:00-05:00" or "2025-11-06").
+IMPORTANT: Dates must be in format YYYY-MM-DDTHH:MM:SS WITHOUT timezone offset (e.g., "2025-11-12T23:59:59", NOT "2025-11-12T23:59:59-05:00").
+The tool automatically handles timezone conversion using the system's local timezone.
 
 Note: Notion API must be configured with an integration token and calendar database ID before use.
 The database should have these properties: Name (title), Date (date), Description (rich_text), Location (rich_text), Tags (multi_select).`,
