@@ -43,7 +43,12 @@ export const GOOGLE_SCOPES = {
   CALENDAR_EVENTS: 'https://www.googleapis.com/auth/calendar.events',
   DOCUMENTS: 'https://www.googleapis.com/auth/documents',
   DRIVE_FILE: 'https://www.googleapis.com/auth/drive.file',
+  DRIVE_READONLY: 'https://www.googleapis.com/auth/drive.readonly',
+  DRIVE: 'https://www.googleapis.com/auth/drive',
   SPREADSHEETS: 'https://www.googleapis.com/auth/spreadsheets',
+  GMAIL_READONLY: 'https://www.googleapis.com/auth/gmail.readonly',
+  GMAIL_SEND: 'https://www.googleapis.com/auth/gmail.send',
+  GMAIL_MODIFY: 'https://www.googleapis.com/auth/gmail.modify',
 } as const;
 
 /**
@@ -52,7 +57,8 @@ export const GOOGLE_SCOPES = {
 export const DEFAULT_SCOPES = [
   GOOGLE_SCOPES.CALENDAR,
   GOOGLE_SCOPES.DOCUMENTS,
-  GOOGLE_SCOPES.DRIVE_FILE,
+  GOOGLE_SCOPES.DRIVE,
+  GOOGLE_SCOPES.GMAIL_MODIFY,
 ];
 
 /**

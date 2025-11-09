@@ -79,6 +79,34 @@ export const MENTIONABLE_TOOLS: ToolMention[] = [
     ],
     usage: 'Mention @googledocs when working with documents or notes',
   },
+  {
+    name: 'gmail',
+    description: 'Gmail',
+    icon: '📧',
+    capabilities: [
+      'List and read email messages',
+      'Send new emails',
+      'Search messages with Gmail syntax',
+      'Mark messages as read/unread',
+      'Delete messages',
+      'Organize inbox',
+    ],
+    usage: 'Mention @gmail when working with emails or inbox management',
+  },
+  {
+    name: 'googledrive',
+    description: 'Google Drive',
+    icon: '📁',
+    capabilities: [
+      'List and search files',
+      'Get file metadata and details',
+      'Download file content',
+      'Read PDF documents',
+      'Filter by file type or folder',
+      'Access shared files',
+    ],
+    usage: 'Mention @googledrive when working with files or documents in Drive',
+  },
 ];
 
 /**

@@ -18,7 +18,7 @@ AI coding assistant for students built with Claude Sonnet 4.5
   - Search the web (DuckDuckGo)
 - 🔧 Agentic tool calling (agent can use multiple tools per conversation)
 - 🎓 **Student-Focused Tools**
-  - Canvas LMS integration
+  - Canvas LMS integration (with automatic PDF reading!)
   - Notion Calendar & Notes integration
   - DeepWiki for understanding open source repos
   - Todo management (coming soon)
@@ -104,10 +104,12 @@ Reference files, directories, and tools directly in your prompts. Type `@` to se
 
 **Available Tools to Mention:**
 - 📚 `@canvas` - Canvas LMS (courses, assignments, grades)
-- 📝 `@notion` - Notion Notes
-- 📅 `@notioncal` - Notion Calendar
 - 📖 `@deepwiki` - GitHub repository documentation
 - 🔍 `@websearch` - Web search
+- 📅 `@googlecal` - Google Calendar (schedule, events)
+- 📝 `@googledocs` - Google Docs (documents, notes)
+- 📧 `@gmail` - Gmail (email management)
+- 📁 `@googledrive` - Google Drive (files, PDFs)
 
 **Autocomplete Navigation:**
 - Type `@` to see files, directories, and tools
@@ -177,7 +179,7 @@ See [ACTION_LOGGING.md](./ACTION_LOGGING.md) for complete documentation.
 - ✅ Agentic tool calling (10 tools available)
 
 **Phase 6: ✅ Complete** - Student-specific tools
-- ✅ Canvas LMS integration
+- ✅ Canvas LMS integration (with automatic PDF reading from assignments!)
 - ✅ Notion Calendar integration
 - ✅ Notion Notes integration
 - ✅ DeepWiki (GitHub repository documentation)

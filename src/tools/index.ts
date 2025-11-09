@@ -13,6 +13,8 @@ import { canvasTool } from './student/canvas.js';
 import { deepwikiTool } from './student/deepwiki.js';
 import { googleCalendarTool } from './student/google-calendar.js';
 import { googleDocsTool } from './student/google-docs.js';
+import { googleGmailTool } from './student/google-gmail.js';
+import { googleDriveTool } from './student/google-drive.js';
 
 export function createToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -38,6 +40,8 @@ export function createToolRegistry(): ToolRegistry {
   registry.register(deepwikiTool);
   registry.register(googleCalendarTool);
   registry.register(googleDocsTool);
+  registry.register(googleGmailTool);
+  registry.register(googleDriveTool);
 
   return registry;
 }

@@ -46,7 +46,6 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentToolUse, setCurrentToolUse] = useState<string | null>(null);
   const [totalTokens, setTotalTokens] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
@@ -411,22 +410,24 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       for await (const chunk of agent.chat(messageToSend)) {
         if (chunk.type === 'content' && chunk.content) {
           assistantMessage += chunk.content;
-          // Update the assistant message in real-time
-          setMessages(prev => {
-            const newMessages = [...prev];
-            if (currentAssistantIndex === -1) {
-              // First content chunk - create assistant message
-              newMessages.push({ role: 'assistant', content: assistantMessage });
-              currentAssistantIndex = newMessages.length - 1;
-            } else {
-              // Update existing assistant message
-              newMessages[currentAssistantIndex].content = assistantMessage;
-            }
-            return newMessages;
-          });
+          // Only update UI if there's meaningful content (not just whitespace)
+          if (assistantMessage.trim()) {
+            // Update the assistant message in real-time
+            setMessages(prev => {
+              const newMessages = [...prev];
+              if (currentAssistantIndex === -1) {
+                // First content chunk - create assistant message
+                newMessages.push({ role: 'assistant', content: assistantMessage });
+                currentAssistantIndex = newMessages.length - 1;
+              } else {
+                // Update existing assistant message
+                newMessages[currentAssistantIndex].content = assistantMessage;
+              }
+              return newMessages;
+            });
+          }
         } else if (chunk.type === 'tool_use' && chunk.toolName) {
-          // Show tool being used
-          setCurrentToolUse(chunk.toolName);
+          // Show tool being used (in message area)
           
           // Only add a new tool message if the last message isn't already the same tool
           setMessages(prev => {
@@ -455,7 +456,6 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
           assistantMessage = '';
           currentAssistantIndex = -1;
         } else if (chunk.type === 'tool_result') {
-          setCurrentToolUse(null);
           const result = chunk.toolResult || '';
           
           // Parse file changes from tool results
@@ -506,7 +506,6 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
       setMessages(prev => [...prev, { role: 'system', content: `❌ Error: ${errorMsg}` }]);
     } finally {
       setIsProcessing(false);
-      setCurrentToolUse(null);
       // Update token count after conversation
       setTotalTokens(agent.getTokenEstimate());
     }
@@ -546,11 +545,7 @@ export const ChatUI: React.FC<ChatUIProps> = ({ agent }) => {
         <Box borderStyle="round" borderColor="#ff8800" paddingX={1} marginBottom={1}>
           {isProcessing ? (
             <Box>
-              {currentToolUse ? (
-                <Text color="#ff8800">Executing: {currentToolUse}...</Text>
-              ) : (
-                <Text color="#ff8800">Thinking...</Text>
-              )}
+              <Text color="#ff8800">Thinking...</Text>
             </Box>
           ) : (
             <Box>
@@ -774,10 +769,10 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
               gcalSummary = 'Listing calendar events...';
               break;
             case 'create_event':
-              gcalSummary = `Creating event: "${toolInput?.title || 'Untitled'}"`;
+              gcalSummary = `Creating event: "${toolInput?.summary || 'Untitled'}"`;
               break;
             case 'update_event':
-              gcalSummary = `Updating event: "${toolInput?.title || toolInput?.event_id}"`;
+              gcalSummary = `Updating event: "${toolInput?.summary || toolInput?.event_id}"`;
               break;
             case 'delete_event':
               gcalSummary = `Deleting event (ID: ${toolInput?.event_id || 'unknown'})`;
@@ -811,6 +806,28 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({ message }) => {
           return {
             name: 'google_docs',
             summary: gdocsSummary,
+          };
+        case 'deepwiki':
+          const deepwikiAction = toolInput?.action || 'unknown';
+          const repoName = toolInput?.repo_name || 'repository';
+          let deepwikiSummary = '';
+          switch (deepwikiAction) {
+            case 'read_wiki_structure':
+              deepwikiSummary = `Getting documentation structure for ${repoName}`;
+              break;
+            case 'read_wiki_contents':
+              deepwikiSummary = `Reading full documentation for ${repoName}`;
+              break;
+            case 'ask_question':
+              const question = toolInput?.question || 'question';
+              deepwikiSummary = `Asking: "${question}"\nRepo: ${repoName}`;
+              break;
+            default:
+              deepwikiSummary = `${deepwikiAction} on ${repoName}`;
+          }
+          return {
+            name: 'deepwiki',
+            summary: deepwikiSummary,
           };
         default:
           return {

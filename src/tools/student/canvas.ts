@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { Tool, ToolResult } from '../../types/tool.js';
 import { logger } from '../../utils/logger.js';
+import { extractPdfLinks, stripHtmlTags } from '../../utils/html-parser.js';
+import { readPdfFromUrl, isPdfParseAvailable } from '../../utils/pdf-utils.js';
 
 const inputSchema = z.object({
   action: z.enum([
@@ -12,6 +14,7 @@ const inputSchema = z.object({
   ]).describe('Action to perform'),
   course_id: z.string().optional().describe('Canvas course ID'),
   assignment_id: z.string().optional().describe('Canvas assignment ID'),
+  read_pdfs: z.boolean().default(true).describe('Automatically download and read PDF files from assignment descriptions (default: true)'),
 });
 
 interface CanvasConfig {
@@ -70,7 +73,7 @@ class CanvasClient {
   }
 
   async getAssignment(courseId: string, assignmentId: string): Promise<any> {
-    return this.makeRequest(`/courses/${courseId}/assignments/${assignmentId}`);
+    return this.makeRequest(`/courses/${courseId}/assignments/${assignmentId}?include[]=attachments`);
   }
 
   async getGrades(courseId: string): Promise<any> {
@@ -136,13 +139,79 @@ function formatAssignments(assignments: any[]): string {
   return output;
 }
 
-function formatAssignment(assignment: any): string {
+async function formatAssignment(assignment: any, readPdfs: boolean = true): Promise<string> {
   let output = `**${assignment.name}**\n\n`;
   
   if (assignment.description) {
+    // Extract PDF links before stripping HTML
+    const pdfLinks = extractPdfLinks(assignment.description);
+    
     // Strip HTML tags for cleaner output
-    const description = assignment.description.replace(/<[^>]*>/g, '').trim();
+    const description = stripHtmlTags(assignment.description);
     output += `Description:\n${description}\n\n`;
+    
+    // Process PDF links if any are found in description
+    if (pdfLinks.length > 0) {
+      output += `\n📎 **Files in Description (${pdfLinks.length}):**\n`;
+      
+      for (const link of pdfLinks) {
+        output += `\n📄 ${link.text || 'PDF Document'}\n`;
+        output += `   URL: ${link.url}\n`;
+        
+        if (readPdfs && isPdfParseAvailable()) {
+          output += `   Reading PDF...\n`;
+          const pdfResult = await readPdfFromUrl(link.url);
+          
+          if (pdfResult.success && pdfResult.text) {
+            output += `   ✅ PDF successfully read (${pdfResult.pages} pages, ${pdfResult.text.length} characters)\n`;
+            output += `\n   **PDF Content:**\n`;
+            // Indent PDF content for readability
+            const indentedText = pdfResult.text.split('\n').map(line => `   ${line}`).join('\n');
+            output += indentedText + '\n';
+          } else {
+            output += `   ❌ Failed to read PDF: ${pdfResult.error}\n`;
+          }
+        } else if (readPdfs && !isPdfParseAvailable()) {
+          output += `   ⚠️ PDF reading requires pdf-parse package. Install with: npm install pdf-parse\n`;
+        }
+      }
+      output += '\n';
+    }
+  }
+  
+  // Process Canvas attachments (separate from description links)
+  if (assignment.attachments && assignment.attachments.length > 0) {
+    const pdfAttachments = assignment.attachments.filter((att: any) => 
+      att.content_type === 'application/pdf' || att.filename?.toLowerCase().endsWith('.pdf')
+    );
+    
+    if (pdfAttachments.length > 0) {
+      output += `\n📎 **Attached Files (${pdfAttachments.length}):**\n`;
+      
+      for (const attachment of pdfAttachments) {
+        output += `\n📄 ${attachment.display_name || attachment.filename}\n`;
+        output += `   Size: ${Math.round(attachment.size / 1024)} KB\n`;
+        output += `   URL: ${attachment.url}\n`;
+        
+        if (readPdfs && isPdfParseAvailable()) {
+          output += `   Reading PDF...\n`;
+          const pdfResult = await readPdfFromUrl(attachment.url);
+          
+          if (pdfResult.success && pdfResult.text) {
+            output += `   ✅ PDF successfully read (${pdfResult.pages} pages, ${pdfResult.text.length} characters)\n`;
+            output += `\n   **PDF Content:**\n`;
+            // Indent PDF content for readability
+            const indentedText = pdfResult.text.split('\n').map(line => `   ${line}`).join('\n');
+            output += indentedText + '\n';
+          } else {
+            output += `   ❌ Failed to read PDF: ${pdfResult.error}\n`;
+          }
+        } else if (readPdfs && !isPdfParseAvailable()) {
+          output += `   ⚠️ PDF reading requires pdf-parse package. Install with: npm install pdf-parse\n`;
+        }
+      }
+      output += '\n';
+    }
   }
   
   if (assignment.due_at) {
@@ -233,7 +302,7 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
     }
 
     const client = new CanvasClient(canvasConfig.domain, canvasConfig.accessToken);
-    const { action, course_id, assignment_id } = params;
+    const { action, course_id, assignment_id, read_pdfs } = params;
 
     logger.debug(`Executing Canvas action: ${action}`, { course_id, assignment_id });
 
@@ -268,9 +337,10 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
           };
         }
         const assignment = await client.getAssignment(course_id, assignment_id);
+        const formattedOutput = await formatAssignment(assignment, read_pdfs);
         return {
           success: true,
-          output: formatAssignment(assignment),
+          output: formattedOutput,
         };
       }
 
@@ -319,14 +389,20 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
 
 export const canvasTool: Tool = {
   name: 'canvas',
-  description: `Interact with Canvas LMS to access course information, assignments, grades, and announcements. 
+  description: `Interact with Canvas LMS to access course information, assignments, grades, and announcements. Automatically extracts and reads PDF files from assignment descriptions.
   
 Available actions:
 - list_courses: Get all active courses
 - list_assignments: Get assignments for a course (requires course_id)
-- get_assignment: Get detailed assignment information (requires course_id and assignment_id)
+- get_assignment: Get detailed assignment information including PDF attachments (requires course_id and assignment_id)
 - get_grades: Get current grades for a course (requires course_id)
 - list_announcements: Get recent announcements for a course (requires course_id)
+
+PDF Reading:
+- When getting assignment details, PDFs linked in the description are automatically downloaded and read
+- Set read_pdfs: false to disable automatic PDF reading
+- Requires pdf-parse package (npm install pdf-parse)
+- PDF content is extracted as plain text and included in the output
 
 Note: Canvas must be configured with domain and access token before use.`,
   inputSchema,

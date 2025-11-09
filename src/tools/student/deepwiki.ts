@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { Tool, ToolResult } from '../../types/tool.js';
 import { logger } from '../../utils/logger.js';
 
@@ -25,7 +27,57 @@ const inputSchema = z.object({
  */
 
 class DeepWikiClient {
-  private readonly baseUrl = 'https://mcp.deepwiki.com';
+  private readonly serverUrl = 'https://mcp.deepwiki.com/sse';
+  private client: Client | null = null;
+  private transport: SSEClientTransport | null = null;
+
+  /**
+   * Initialize the MCP client connection
+   */
+  private async ensureConnected(): Promise<Client> {
+    if (this.client) {
+      return this.client;
+    }
+
+    try {
+      logger.debug('Connecting to DeepWiki MCP server...');
+      
+      this.transport = new SSEClientTransport(new URL(this.serverUrl));
+      this.client = new Client(
+        {
+          name: 'school-agent',
+          version: '1.0.0',
+        },
+        {
+          capabilities: {},
+        }
+      );
+
+      await this.client.connect(this.transport);
+      logger.debug('Successfully connected to DeepWiki MCP server');
+      
+      return this.client;
+    } catch (error) {
+      logger.error(error as Error, 'Failed to connect to DeepWiki MCP server');
+      throw new Error(`Failed to connect to DeepWiki: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Close the MCP client connection
+   */
+  async disconnect(): Promise<void> {
+    if (this.client) {
+      try {
+        await this.client.close();
+        this.client = null;
+        this.transport = null;
+        logger.debug('Disconnected from DeepWiki MCP server');
+      } catch (error) {
+        logger.error(error as Error, 'Error disconnecting from DeepWiki');
+      }
+    }
+  }
 
   /**
    * Get the documentation structure for a repository
@@ -35,12 +87,13 @@ class DeepWikiClient {
     logger.debug(`Fetching wiki structure for ${repoName}`);
     
     try {
-      // Use the MCP tool via direct API call
-      const response = await this.callMCPTool('read_wiki_structure', {
-        repoName,
+      const client = await this.ensureConnected();
+      const result = await client.callTool({
+        name: 'read_wiki_structure',
+        arguments: { repoName },
       });
       
-      return response;
+      return result;
     } catch (error) {
       logger.error(error as Error, `Failed to get wiki structure for ${repoName}`);
       throw error;
@@ -55,11 +108,13 @@ class DeepWikiClient {
     logger.debug(`Fetching wiki contents for ${repoName}`);
     
     try {
-      const response = await this.callMCPTool('read_wiki_contents', {
-        repoName,
+      const client = await this.ensureConnected();
+      const result = await client.callTool({
+        name: 'read_wiki_contents',
+        arguments: { repoName },
       });
       
-      return response;
+      return result;
     } catch (error) {
       logger.error(error as Error, `Failed to get wiki contents for ${repoName}`);
       throw error;
@@ -74,60 +129,16 @@ class DeepWikiClient {
     logger.debug(`Asking question about ${repoName}: ${question}`);
     
     try {
-      const response = await this.callMCPTool('ask_question', {
-        repoName,
-        question,
+      const client = await this.ensureConnected();
+      const result = await client.callTool({
+        name: 'ask_question',
+        arguments: { repoName, question },
       });
       
-      return response;
+      return result;
     } catch (error) {
       logger.error(error as Error, `Failed to ask question about ${repoName}`);
       throw error;
-    }
-  }
-
-  /**
-   * Internal method to call MCP tools via the DeepWiki MCP server
-   * Uses the SSE endpoint for compatibility
-   */
-  private async callMCPTool(toolName: string, params: any): Promise<any> {
-    // For now, we'll use a simple HTTP approach
-    // In a full MCP implementation, this would use the MCP protocol
-    const url = `${this.baseUrl}/sse`;
-    
-    try {
-      // Note: The actual MCP protocol implementation would be more complex
-      // This is a simplified version that demonstrates the concept
-      // In production, you'd use an MCP client library
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'tools/call',
-          params: {
-            name: toolName,
-            arguments: params,
-          },
-          id: Date.now(),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`DeepWiki MCP error (${response.status}): ${await response.text()}`);
-      }
-
-      const data = await response.json() as any;
-      return data.result || data;
-    } catch (error) {
-      // If direct API call fails, provide helpful error message
-      throw new Error(
-        `Failed to call DeepWiki MCP tool "${toolName}". ` +
-        `This may require proper MCP client setup. Error: ${(error as Error).message}`
-      );
     }
   }
 }
@@ -228,7 +239,6 @@ function formatAnswer(answer: any, repoName: string, question: string): string {
 async function executeDeepWiki(params: z.infer<typeof inputSchema>): Promise<ToolResult> {
   const { action, repo_name, question } = params;
   
-  // Validate repo name format
   if (!repo_name.includes('/')) {
     return {
       success: false,
@@ -245,43 +255,78 @@ async function executeDeepWiki(params: z.infer<typeof inputSchema>): Promise<Too
     switch (action) {
       case 'read_wiki_structure':
         result = await client.getWikiStructure(repo_name);
-        formattedOutput = formatWikiStructure(result, repo_name);
+        formattedOutput = formatWikiStructure(extractContent(result), repo_name);
         break;
 
       case 'read_wiki_contents':
         result = await client.getWikiContents(repo_name);
-        formattedOutput = formatWikiContents(result, repo_name);
+        formattedOutput = formatWikiContents(extractContent(result), repo_name);
         break;
 
       case 'ask_question':
         if (!question) {
+          await client.disconnect();
           return {
             success: false,
             error: 'Question is required for ask_question action',
           };
         }
         result = await client.askQuestion(repo_name, question);
-        formattedOutput = formatAnswer(result, repo_name, question);
+        formattedOutput = formatAnswer(extractContent(result), repo_name, question);
         break;
 
       default:
+        await client.disconnect();
         return {
           success: false,
           error: `Unknown action: ${action}`,
         };
     }
 
+    await client.disconnect();
+    
     return {
       success: true,
       output: formattedOutput,
     };
   } catch (error) {
+    await client.disconnect();
     logger.error(error as Error, 'DeepWiki tool execution failed');
     return {
       success: false,
       error: `DeepWiki error: ${(error as Error).message}`,
     };
   }
+}
+
+function extractContent(mcpResult: any): any {
+  if (!mcpResult) return mcpResult;
+  
+  if (mcpResult.content && Array.isArray(mcpResult.content)) {
+    if (mcpResult.content.length === 1) {
+      const item = mcpResult.content[0];
+      if (item.type === 'text' && item.text) {
+        try {
+          return JSON.parse(item.text);
+        } catch {
+          return item.text;
+        }
+      }
+      return item;
+    }
+    return mcpResult.content.map((item: any) => {
+      if (item.type === 'text' && item.text) {
+        try {
+          return JSON.parse(item.text);
+        } catch {
+          return item.text;
+        }
+      }
+      return item;
+    });
+  }
+  
+  return mcpResult;
 }
 
 export const deepwikiTool: Tool = {

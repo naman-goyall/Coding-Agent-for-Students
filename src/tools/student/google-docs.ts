@@ -50,6 +50,9 @@ type InputSchema = z.infer<typeof inputSchema>;
 function parseMarkdownToRequests(text: string, startIndex: number): any[] {
   const requests: any[] = [];
   
+  // Preprocess: Convert list markers to bullet points
+  text = text.replace(/^([-*+])\s+/gm, '• ');
+  
   // Track all markdown patterns with their original positions
   interface MarkdownMatch {
     originalStart: number;
@@ -57,7 +60,7 @@ function parseMarkdownToRequests(text: string, startIndex: number): any[] {
     contentStart: number;
     contentEnd: number;
     content: string;
-    type: 'bold' | 'italic' | 'heading1' | 'heading2' | 'heading3';
+    type: 'bold' | 'italic' | 'code' | 'heading1' | 'heading2' | 'heading3';
     syntaxLength: number;
   }
   
@@ -96,30 +99,82 @@ function parseMarkdownToRequests(text: string, startIndex: number): any[] {
     });
   }
   
-  // Find all heading patterns (# Heading)
+  // Find all inline code patterns (`code`)
+  const codePattern = /`([^`]+)`/g;
+  
+  while ((match = codePattern.exec(text)) !== null) {
+    matches.push({
+      originalStart: match.index,
+      originalEnd: match.index + match[0].length,
+      contentStart: match.index + 1, // +1 for opening `
+      contentEnd: match.index + 1 + match[1].length,
+      content: match[1],
+      type: 'code',
+      syntaxLength: 2, // backticks on both sides
+    });
+  }
+  
+  // Process lines for headings
   const lines = text.split('\n');
   let currentPos = 0;
   
   for (const line of lines) {
+    // Check for headings first (# Heading)
     const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
-      const content = headingMatch[2];
+      let content = headingMatch[2].trim();
+      
+      // Strip inline markdown from heading content
+      content = content
+        .replace(/\*\*(.+?)\*\*/g, '$1')  // **bold**
+        .replace(/__(.+?)__/g, '$1')      // __bold__
+        .replace(/\*(.+?)\*/g, '$1')      // *italic*
+        .replace(/_(.+?)_/g, '$1')        // _italic_
+        .replace(/`(.+?)`/g, '$1');       // `code`
+      
+      const hashAndSpace = headingMatch[1].length + 1;
+      
+      logger.debug(`Found heading: level=${level}, content="${content}"`);
+      
       matches.push({
         originalStart: currentPos,
         originalEnd: currentPos + line.length,
-        contentStart: currentPos + headingMatch[1].length + 1, // +1 for space
-        contentEnd: currentPos + headingMatch[1].length + 1 + content.length,
+        contentStart: currentPos + hashAndSpace,
+        contentEnd: currentPos + hashAndSpace + content.length,
         content: content,
         type: level === 1 ? 'heading1' : level === 2 ? 'heading2' : 'heading3',
-        syntaxLength: headingMatch[1].length + 1, // ### + space
+        syntaxLength: hashAndSpace,
       });
     }
+    
     currentPos += line.length + 1; // +1 for newline
   }
   
-  // Sort matches by position
-  matches.sort((a, b) => a.originalStart - b.originalStart);
+  // Sort matches by position and length (longer matches first to prioritize headings over inline formatting)
+  matches.sort((a, b) => {
+    if (a.originalStart !== b.originalStart) {
+      return a.originalStart - b.originalStart;
+    }
+    // If same start, prefer longer matches (headings over inline formatting)
+    return (b.originalEnd - b.originalStart) - (a.originalEnd - a.originalStart);
+  });
+  
+  // Filter out overlapping matches (keep first match in each range)
+  const nonOverlappingMatches: MarkdownMatch[] = [];
+  let lastEnd = -1;
+  
+  for (const m of matches) {
+    // Skip if this match overlaps with the previous one
+    if (m.originalStart < lastEnd) {
+      logger.debug(`Skipping overlapping match: ${m.type} at ${m.originalStart}-${m.originalEnd}`);
+      continue;
+    }
+    nonOverlappingMatches.push(m);
+    lastEnd = m.originalEnd;
+  }
+  
+  logger.debug(`Filtered to ${nonOverlappingMatches.length} non-overlapping matches from ${matches.length} total`);
   
   // Build plain text and calculate new positions
   let plainText = '';
@@ -131,16 +186,22 @@ function parseMarkdownToRequests(text: string, startIndex: number): any[] {
     type: string;
   }> = [];
   
-  for (const m of matches) {
+  logger.debug(`Building plainText from ${nonOverlappingMatches.length} matches. Original text length: ${text.length}`);
+  
+  for (const m of nonOverlappingMatches) {
     // Add text before this match
     if (m.originalStart > lastPos) {
-      plainText += text.substring(lastPos, m.originalStart);
+      const before = text.substring(lastPos, m.originalStart);
+      plainText += before;
+      logger.debug(`Added text before match: "${before.substring(0, 50)}..."`);
     }
     
     // Add the content (without markdown syntax)
     const newStart = plainText.length;
     plainText += m.content;
     const newEnd = plainText.length;
+    
+    logger.debug(`Added ${m.type} content: "${m.content}" (range ${newStart}-${newEnd})`);
     
     // Record formatting range in the new text
     formattingRanges.push({
@@ -154,8 +215,12 @@ function parseMarkdownToRequests(text: string, startIndex: number): any[] {
   
   // Add remaining text
   if (lastPos < text.length) {
-    plainText += text.substring(lastPos);
+    const remaining = text.substring(lastPos);
+    plainText += remaining;
+    logger.debug(`Added remaining text: "${remaining.substring(0, 50)}..."`);
   }
+  
+  logger.debug(`Final plainText length: ${plainText.length}, first 200 chars: "${plainText.substring(0, 200)}"`);
   
   // Insert the plain text first
   requests.push({
@@ -186,6 +251,17 @@ function parseMarkdownToRequests(text: string, startIndex: number): any[] {
           textStyle: { italic: true },
           range: { startIndex: range.start, endIndex: range.end },
           fields: 'italic',
+        },
+      });
+    } else if (range.type === 'code') {
+      requests.push({
+        updateTextStyle: {
+          textStyle: { 
+            fontFamily: 'Consolas',
+            backgroundColor: { color: { rgbColor: { red: 0.95, green: 0.95, blue: 0.95 } } },
+          },
+          range: { startIndex: range.start, endIndex: range.end },
+          fields: 'fontFamily,backgroundColor',
         },
       });
     } else if (range.type.startsWith('heading')) {
@@ -604,15 +680,21 @@ Actions available:
 - update_document: Batch update document (advanced)
 - list_documents: List user's Google Docs
 
+IMPORTANT WORKFLOW:
+- When creating content for a single document, use create_document ONCE, then use append_text for additional content
+- DO NOT create multiple documents for the same task - create one document and append to it
+- If you encounter formatting issues, use append_text with simpler content rather than creating a new document
+- The markdown parser handles headings (# ## ###), bold (**text**), italic (*text*), code (\`code\`), and lists (- item)
+
 Requirements:
 - Google OAuth credentials must be configured (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
 - User must authenticate via browser on first use
 - Automatically uses Google Drive API for document listing
 
 Examples:
-- Create document: {action: "create_document", title: "My Notes", content: "Hello World"}
+- Create document: {action: "create_document", title: "My Notes", content: "# Title\n\nContent here"}
+- Append more content: {action: "append_text", document_id: "abc123", text: "\n\n## Section 2\n\nMore content"}
 - List documents: {action: "list_documents", max_results: 10}
-- Append text: {action: "append_text", document_id: "abc123", text: "New paragraph"}
 - Search documents: {action: "list_documents", query: "assignment"}`,
   inputSchema,
   execute,

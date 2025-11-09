@@ -66,11 +66,12 @@ Lists all assignments for a specific course.
 
 ### 3. get_assignment
 
-Gets detailed information about a specific assignment.
+Gets detailed information about a specific assignment, including automatic PDF extraction and reading.
 
 **Parameters**:
 - `course_id` (required): The Canvas course ID
 - `assignment_id` (required): The Canvas assignment ID
+- `read_pdfs` (optional, default: true): Automatically download and read PDF files from assignment descriptions
 
 **Example Usage**:
 ```typescript
@@ -81,13 +82,32 @@ Gets detailed information about a specific assignment.
 }
 ```
 
+**Example - Disable PDF reading**:
+```typescript
+{
+  action: 'get_assignment',
+  course_id: '12345',
+  assignment_id: '67890',
+  read_pdfs: false
+}
+```
+
 **Returns**:
 - Assignment name
 - Full description (HTML stripped)
+- List of attached PDF files (with URLs)
+- Extracted PDF content (if `read_pdfs` is true and pdf-parse is installed)
 - Due date
 - Points possible
 - Submission types
 - Canvas URL
+
+**PDF Reading**:
+- Automatically detects and extracts PDF links from assignment HTML
+- Downloads and reads PDF content using pdf-parse
+- Includes full PDF text in the response
+- Requires `npm install pdf-parse`
+- See [CANVAS_PDF_READING.md](./CANVAS_PDF_READING.md) for details
 
 ### 4. get_grades
 
@@ -172,12 +192,17 @@ All responses are formatted as markdown-friendly text with:
 3. **HTTPS Only**: All API requests use HTTPS
 4. **No Data Storage**: The tool doesn't store Canvas data locally
 
+## Recent Enhancements
+
+✅ **PDF Reading** - Automatically extracts and reads PDF files from assignment descriptions
+
 ## Future Enhancements
 
 Potential additions:
 - Submit assignments
 - Post to discussions
-- Download course files
+- Download course files (non-PDF)
+- Support for other document types (Word, PowerPoint)
 - View quiz information
 - Calendar integration
 - Notification preferences

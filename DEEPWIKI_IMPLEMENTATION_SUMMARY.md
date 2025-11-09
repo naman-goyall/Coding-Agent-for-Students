@@ -1,5 +1,22 @@
 # DeepWiki Integration - Implementation Summary
 
+## ⚠️ IMPORTANT UPDATE (Nov 2025)
+
+**The original implementation was broken and has been fixed.**
+
+### What Was Broken
+The original implementation attempted to make direct HTTP POST requests to the MCP server, which resulted in 404 errors. MCP servers require proper protocol communication via the MCP SDK.
+
+### What Was Fixed
+- **Installed:** `@modelcontextprotocol/sdk` package
+- **Rewrote:** DeepWikiClient to use proper MCP Client and SSEClientTransport
+- **Added:** Proper connection management and cleanup
+- **Fixed:** Response handling to extract MCP content format
+
+**See [DEEPWIKI_FIX_SUMMARY.md](DEEPWIKI_FIX_SUMMARY.md) for complete details.**
+
+---
+
 ## Overview
 
 Successfully implemented DeepWiki integration for the School Agent as specified in Phase 6 of the PROJECT_PLAN.md. This integration enables students to understand and learn from open source repositories effectively.

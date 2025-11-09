@@ -1,6 +1,6 @@
 # Google OAuth Setup Guide
 
-Complete guide for setting up Google OAuth authentication for Google Workspace integration (Calendar, Docs, and Sheets).
+Complete guide for setting up Google OAuth authentication for Google Workspace integration (Calendar, Docs, Gmail, Drive, and Sheets).
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Complete guide for setting up Google OAuth authentication for Google Workspace i
 
 ### Step 1: Create Google Cloud Project
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+1. Go to [Google Cloud Console](https://console.cloud.goocagle.com/)
 2. Click **"Select a project"** → **"New Project"**
 3. Enter project details:
    - **Project name**: `School Agent CLI` (or any name you prefer)
@@ -42,7 +42,8 @@ Complete guide for setting up Google OAuth authentication for Google Workspace i
    **Required APIs:**
    - **Google Calendar API** - Click "Enable"
    - **Google Docs API** - Click "Enable"
-   - **Google Drive API** - Click "Enable" (required for Docs)
+   - **Google Drive API** - Click "Enable" (required for Docs and file access)
+   - **Gmail API** - Click "Enable"
 
    **Optional (for Sheets support):**
    - **Google Sheets API** - Click "Enable"
@@ -75,7 +76,8 @@ Complete guide for setting up Google OAuth authentication for Google Workspace i
 2. Add the following scopes:
    - `.../auth/calendar` - Google Calendar API
    - `.../auth/documents` - Google Docs API
-   - `.../auth/drive.file` - Google Drive API (for file creation)
+   - `.../auth/drive` - Google Drive API (full read access for PDF files)
+   - `.../auth/gmail.modify` - Gmail API (read, send, and organize emails)
    - `.../auth/spreadsheets` - Google Sheets API (optional)
 
 3. Click **"Update"** → **"Save and Continue"**

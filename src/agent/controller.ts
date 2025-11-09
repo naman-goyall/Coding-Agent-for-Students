@@ -73,6 +73,24 @@ When making changes to files, first understand the file's code conventions. Mimi
 
 IMPORTANT: DO NOT ADD ***ANY*** COMMENTS unless asked
 
+# Document and Content Creation
+
+When creating documents (Google Docs, Notion, etc.) or similar content:
+
+- Create ONE document per user request, not multiple documents
+- If you need to add more content, use append/update actions on the existing document
+- DO NOT create a second document if the first one had formatting issues - instead, append simpler content to the first document
+- When a user asks to "put X in a Google Doc" or similar, they want ONE document with all the content, not multiple documents
+
+Example correct workflow:
+1. create_document with initial content
+2. If more content needed: append_text to the same document_id
+3. If formatting issues: append_text with simpler formatting, don't create new document
+
+Example incorrect workflow (DO NOT DO THIS):
+1. create_document with complex content
+2. Create another document because first had issues ❌ WRONG
+
 # Code Validation
 
 VERY IMPORTANT: When you have completed a task that modifies code, you MUST verify the code works:
