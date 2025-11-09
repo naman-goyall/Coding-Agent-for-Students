@@ -2,7 +2,7 @@
  * Token Storage System
  * 
  * Handles secure storage and retrieval of OAuth tokens
- * Tokens are stored in ~/.school-agent/google-tokens.json with restricted permissions
+ * Tokens are stored in ~/.sparky/google-tokens.json with restricted permissions
  */
 
 import fs from 'fs/promises';
@@ -13,7 +13,7 @@ import { StoredTokens, TokenStorageError } from './oauth-types.js';
 /**
  * Token storage configuration
  */
-const STORAGE_DIR = path.join(os.homedir(), '.school-agent');
+const STORAGE_DIR = path.join(os.homedir(), '.sparky');
 const TOKEN_FILE = path.join(STORAGE_DIR, 'google-tokens.json');
 const FILE_PERMISSIONS = 0o600; // Owner read/write only
 

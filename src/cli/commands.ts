@@ -12,13 +12,14 @@ export function createProgram(config: AgentConfig) {
   const program = new Command();
 
   program
-    .name('school-agent')
+    .name('sparky')
     .description('AI coding assistant for students powered by Claude Sonnet 4.5')
     .version('1.0.0');
 
+  // Chat command (default when just running "sparky")
   program
-    .command('chat')
-    .description('Start interactive chat session')
+    .command('chat', { isDefault: true })
+    .description('Start interactive chat session (default)')
     .option('-d, --directory <path>', 'Working directory', process.cwd())
     .action(async (options) => {
       try {
@@ -79,18 +80,19 @@ export function createProgram(config: AgentConfig) {
 🎓 School Agent - Help Topics
 
 GETTING STARTED:
-  school-agent chat              Start interactive chat
-  school-agent run "question"    Ask a single question
+  sparky setup                   Set up Sparky (first time only)
+  sparky                         Start interactive chat
+  sparky run "question"          Ask a single question
 
 EXAMPLES:
   # Start a chat session
-  school-agent chat
+  sparky
 
   # Ask a quick question
-  school-agent run "How do I create a React component?"
+  sparky run "How do I create a React component?"
   
   # Get help with an error
-  school-agent run "What does 'Cannot read property of undefined' mean?"
+  sparky run "What does 'Cannot read property of undefined' mean?"
 
 TIPS:
   - Be specific with your questions

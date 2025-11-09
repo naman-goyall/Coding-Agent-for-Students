@@ -1,11 +1,11 @@
 {
-  "name": "school-agent",
+  "name": "sparky-agent",
   "version": "1.0.0",
   "description": "AI coding assistant for students built with Claude Sonnet 4.5",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "school-agent": "./dist/index.js"
+    "sparky": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
@@ -57,5 +57,18 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/naman-goyall/Coding-Agent-for-Students"
+  },
+  "bugs": {
+    "url": "https://github.com/naman-goyall/Coding-Agent-for-Students/issues"
+  },
+  "homepage": "https://github.com/naman-goyall/Coding-Agent-for-Students#readme"
 }
