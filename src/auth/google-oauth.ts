@@ -346,16 +346,18 @@ export function createGoogleOAuthFromEnv(
   scopes?: string[],
   tokenStorage?: TokenStorage
 ): GoogleOAuth {
-  // Use credentials from environment or bundled defaults
-  // Priority: .env (local dev) → hardcoded in oauth-defaults.ts (production)
-  const clientId = process.env.GOOGLE_CLIENT_ID || 'your-client-id.apps.googleusercontent.com';
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || 'GOCSPX-your-client-secret';
+  // Import DEFAULT_GOOGLE_OAUTH from oauth-defaults.ts
+  // This contains the hardcoded credentials that work for all users
+  const { DEFAULT_GOOGLE_OAUTH } = require('../config/oauth-defaults.js');
+  
+  const clientId = DEFAULT_GOOGLE_OAUTH.clientId;
+  const clientSecret = DEFAULT_GOOGLE_OAUTH.clientSecret;
 
   // Check if credentials are still placeholder values
   if (clientId === 'your-client-id.apps.googleusercontent.com' || 
       clientSecret === 'GOCSPX-your-client-secret') {
     throw new OAuthError(
-      'Google OAuth credentials not configured. Developer: Please add your credentials to src/config/oauth-defaults.ts or set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET environment variables.',
+      'Google OAuth credentials not configured. Developer: Please update src/config/oauth-defaults.ts with your actual credentials.',
       'MISSING_CREDENTIALS'
     );
   }
