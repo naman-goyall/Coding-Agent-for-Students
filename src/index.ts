@@ -30,7 +30,7 @@ async function main() {
       if (!hasPersistentConfig) {
         // First-time user - automatically run setup wizard
         console.log('');
-        console.log(chalk.yellow.bold('   👋 Welcome to Sparky!'));
+        console.log(chalk.hex('#D4A574').bold('   👋 Welcome to Sparky!'));
         console.log('');
         console.log(chalk.white('   It looks like this is your first time running Sparky.'));
         console.log(chalk.white('   Let\'s get you set up with a quick configuration wizard.'));

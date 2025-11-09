@@ -14,7 +14,7 @@ import { DEFAULT_SCOPES } from '../auth/oauth-types.js';
 // Color scheme matching the agent UI
 const colors = {
   primary: chalk.hex('#ff8800'),      // Orange - primary accent
-  secondary: chalk.yellow,             // Yellow - highlights
+  secondary: chalk.hex('#D4A574'),    // Tan/beige - ASCII art (matches agent UI)
   success: chalk.green,                // Green - success messages
   error: chalk.red,                    // Red - errors
   info: chalk.cyan,                    // Cyan - links and info
