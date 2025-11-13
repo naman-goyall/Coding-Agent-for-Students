@@ -8,6 +8,7 @@ export interface AgentConfig {
     domain: string;
     accessToken: string;
   };
+  tavilyApiKey?: string;
   workingDirectory: string;
 }
 

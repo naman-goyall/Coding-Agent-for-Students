@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.js';
 import type { AgentConfig } from '../types/config.js';
 import { createToolRegistry } from '../tools/index.js';
 import { setCanvasConfig } from '../tools/student/canvas.js';
+import { setTavilyApiKey } from '../tools/system/web-search.js';
 
 export function createProgram(config: AgentConfig) {
   const program = new Command();
@@ -27,6 +28,12 @@ export function createProgram(config: AgentConfig) {
         if (config.canvas) {
           setCanvasConfig(config.canvas);
           logger.info('Canvas integration enabled');
+        }
+
+        // Initialize Tavily API key if available
+        if (config.tavilyApiKey) {
+          setTavilyApiKey(config.tavilyApiKey);
+          logger.info('Tavily search integration enabled');
         }
 
         const toolRegistry = createToolRegistry();

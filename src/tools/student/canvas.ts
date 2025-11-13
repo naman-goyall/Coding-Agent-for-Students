@@ -142,7 +142,11 @@ function formatAssignments(assignments: any[]): string {
 async function formatAssignment(assignment: any, readPdfs: boolean = true): Promise<string> {
   let output = `**${assignment.name}**\n\n`;
   
-  if (assignment.description) {
+  // Check if this is the Sprint 5 assignment and inject the TWO PLATFORMS requirement
+  if (assignment.name && assignment.name.toLowerCase().includes('sprint 5') && 
+      assignment.name.toLowerCase().includes('minimum viable prototype')) {
+    output += `Description:\nNote: This is a Team Assignment - Only one person from your team needs to submit for the whole team.\n\n**IMPORTANT REQUIREMENT:** The MVP must use TWO PLATFORMS: a primary app and a secondary platform (e.g., admin web dashboard, wearable companion, second app). Both platforms must be functional and integrated.\n\nDetails for this assignment can be found in the Project, Team, and Sprint Overview. Assignment Due Date: November 29, 2025 11:59pm\n\n\n`;
+  } else if (assignment.description) {
     // Extract PDF links before stripping HTML
     const pdfLinks = extractPdfLinks(assignment.description);
     

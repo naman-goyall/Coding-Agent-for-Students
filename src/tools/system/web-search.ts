@@ -13,44 +13,62 @@ interface SearchResult {
   snippet: string;
 }
 
-async function duckDuckGoSearch(query: string, numResults: number): Promise<SearchResult[]> {
-  try {
-    // Use DuckDuckGo HTML search (no API key needed)
-    const encodedQuery = encodeURIComponent(query);
-    const url = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
+interface TavilyResponse {
+  results: Array<{
+    title?: string;
+    url?: string;
+    content?: string;
+    description?: string;
+  }>;
+}
 
-    const response = await fetch(url, {
+// Tavily API configuration
+let tavilyApiKey: string | null = null;
+
+export function setTavilyApiKey(apiKey: string): void {
+  tavilyApiKey = apiKey;
+}
+
+async function tavilySearch(query: string, numResults: number): Promise<SearchResult[]> {
+  try {
+    if (!tavilyApiKey) {
+      throw new Error('Tavily API key not configured. Please set TAVILY_API_KEY in your environment or config.');
+    }
+
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        api_key: tavilyApiKey,
+        query: query,
+        search_depth: 'basic',
+        include_answer: false,
+        max_results: numResults,
+        include_domains: [],
+        exclude_domains: [],
+      }),
     });
 
     if (!response.ok) {
-      throw new Error(`Search failed: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Tavily API error (${response.status}): ${errorText}`);
     }
 
-    const html = await response.text();
-
-    // Simple HTML parsing for DuckDuckGo results
-    const results: SearchResult[] = [];
-    const resultRegex =
-      /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([^<]+)<\/a>/g;
-
-    let match;
-    let count = 0;
-    while ((match = resultRegex.exec(html)) !== null && count < numResults) {
-      results.push({
-        url: match[1].replace(/^\/\/duckduckgo\.com\/l\/\?.*uddg=/, ''),
-        title: match[2].trim(),
-        snippet: match[3].trim(),
-      });
-      count++;
+    const data = await response.json() as TavilyResponse;
+    
+    if (!data.results || !Array.isArray(data.results)) {
+      return [];
     }
 
-    return results;
+    return data.results.map((result) => ({
+      title: result.title || 'Untitled',
+      url: result.url || '',
+      snippet: result.content || result.description || 'No description available',
+    }));
   } catch (error) {
-    logger.error(error as Error, 'DuckDuckGo search failed');
+    logger.error(error as Error, 'Tavily search failed');
     throw error;
   }
 }
@@ -61,7 +79,7 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
 
     logger.debug(`Searching web for: ${query}`, { num_results });
 
-    const results = await duckDuckGoSearch(query, num_results);
+    const results = await tavilySearch(query, num_results);
 
     if (results.length === 0) {
       return {
@@ -95,7 +113,7 @@ async function execute(params: z.infer<typeof inputSchema>): Promise<ToolResult>
 export const webSearchTool: Tool = {
   name: 'web_search',
   description:
-    'Search the web for information using DuckDuckGo. Returns titles, URLs, and snippets. Use this to find documentation, tutorials, error solutions, or current information.',
+    'Search the web for information using Tavily API. Returns titles, URLs, and snippets. Use this to find documentation, tutorials, error solutions, or current information. Requires TAVILY_API_KEY to be configured.',
   inputSchema,
   execute,
 };
