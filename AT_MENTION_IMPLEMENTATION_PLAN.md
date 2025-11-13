@@ -4,7 +4,7 @@
 Implement @mention functionality to allow users to reference files, directories, and tools in their prompts. When a user types `@`, they'll see autocomplete suggestions for:
 - Files in the workspace
 - Directories in the workspace
-- Student tools (Canvas, Notion Calendar, Notion Notes, DeepWiki, Web Search)
+- Student tools (Canvas, Google Calendar, Google Docs, DeepWiki, Web Search)
 
 The mentioned items will be automatically added to the agent's context.
 
